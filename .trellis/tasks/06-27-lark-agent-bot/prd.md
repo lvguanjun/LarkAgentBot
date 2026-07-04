@@ -127,6 +127,7 @@
 ## Task Map
 
 - `07-04-lark-agent-bot-core`: first independently verifiable child task. Builds the Python package skeleton, local configuration, transport base types, routing rules, Project/Conversation persistence, AGENTS.md fallback, and a fake-LLM text conversation loop. It intentionally excludes live Feishu WebSocket integration, Skills, MCP, and management commands.
+- `07-04-lark-agent-bot-skills`: second independently verifiable child task. Builds Skills discovery, Tier 1 system prompt injection, the safe `read_skill` built-in tool, and a bounded OpenAI-compatible tool loop that persists user → assistant(tool_calls) → tool → assistant(final). It intentionally excludes live Feishu WebSocket integration, MCP tools, Skills script execution, and management commands.
 
 ## Decisions Log
 

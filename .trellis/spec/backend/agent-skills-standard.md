@@ -118,6 +118,111 @@ The SKILL.md body goes into the LLM context. Any `scripts/` or `references/` pat
 
 ---
 
+## Implementation Contract: MVP `read_skill`
+
+### 1. Scope / Trigger
+
+This contract applies when implementing or modifying the bot's Skills subsystem:
+
+- `src/lark_agent/skills.py`
+- `src/lark_agent/tools.py`
+- `Project.get_skills_registry()`
+- `BotApp` system prompt and tool loop integration
+
+The MVP supports read-only Skills. It does not execute `scripts/`, read `assets/`,
+or expose a generic filesystem tool.
+
+### 2. Signatures
+
+```python
+SkillsRegistry.discover(defaults_dir: Path, project_dir: Path) -> SkillsRegistry
+SkillsRegistry.get_system_prompt_fragment() -> str
+SkillsRegistry.read_skill(name: str, file: str | None = None) -> str
+BuiltinTools.get_tools_for_llm() -> list[dict[str, Any]]
+BuiltinTools.call_tool(name: str, args: dict[str, Any]) -> str
+LLMClient.complete_message(
+    system_prompt: str,
+    messages: list[dict[str, Any]],
+    *,
+    tools: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]
+```
+
+### 3. Contracts
+
+- Discovery reads `data/defaults/skills/<dir>/SKILL.md` and
+  `data/groups/<chat_id>/skills/<dir>/SKILL.md`.
+- `SKILL.md` must contain YAML frontmatter with non-empty string `name` and
+  `description`.
+- The frontmatter `name` is the LLM-facing identifier. Directory names are only
+  internal filesystem locators.
+- Group Skills override default Skills by frontmatter `name`; non-conflicting
+  Skills are merged.
+- Tier 1 system prompt content may include only Skill `name` and `description`,
+  plus instructions to call `read_skill`. It must not include full Skill bodies
+  or reference file content.
+- `read_skill(name)` returns the selected Skill's full `SKILL.md`.
+- `read_skill(name, file="references/...")` returns a file under that Skill's
+  `references/` directory.
+- Tool loop history must use OpenAI message shape:
+  `user -> assistant(tool_calls) -> tool -> assistant(final)`.
+
+### 4. Validation & Error Matrix
+
+| Condition | Behavior |
+|-----------|----------|
+| Missing `skills/` directory | Return empty registry, no error |
+| `SKILL.md` missing or invalid frontmatter | Skip that Skill and add `SkillLoadError` |
+| Unknown Skill name | Return `Error: unknown skill 'name'` |
+| `file` is absolute | Return `Error:` text |
+| `file` contains `..` | Return `Error:` text |
+| `file` is outside `references/` | Return `Error:` text |
+| `file` symlink resolves outside `references/` | Return `Error:` text |
+| Tool loop exceeds max iterations | Persist an assistant error message and return it |
+
+Tool errors are model-visible text. They should not crash `BotApp.handle_message()`
+for ordinary bad tool arguments.
+
+### 5. Good/Base/Bad Cases
+
+- Good: a group Skill named `writer` overrides a default Skill with the same
+  frontmatter `name`, and `read_skill("writer")` returns the group `SKILL.md`.
+- Base: no Skills exist, so `tools=[]` and the system prompt remains equivalent
+  to the AGENTS.md-only core path.
+- Bad: `read_skill("writer", file="../config.yaml")` must be rejected before any
+  filesystem read outside the Skill references boundary.
+
+### 6. Tests Required
+
+When changing this subsystem, tests must assert:
+
+- frontmatter discovery and invalid metadata reporting
+- default/group merge and override behavior
+- Tier 1 prompt excludes full Skill body
+- `read_skill` reads `SKILL.md` and `references/...`
+- path rejection for absolute paths, `..`, non-reference paths, and symlink escape
+- fake LLM tool_call executes through `BuiltinTools` and persists the complete
+  OpenAI message chain
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+# Generic file reads expose config, MCP credentials, or conversation history.
+read_file("../../../config.yaml")
+```
+
+#### Correct
+
+```python
+# The LLM names a Skill; the tool resolves the Skill internally and only permits
+# SKILL.md or references/ reads.
+read_skill("writer", file="references/style.md")
+```
+
+---
+
 ## Comparison: MCP Tools vs Skills
 
 | Aspect | MCP Tools | Skills |

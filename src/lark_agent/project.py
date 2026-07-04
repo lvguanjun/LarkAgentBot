@@ -4,6 +4,7 @@ from pathlib import Path
 
 from lark_agent.agents_conf import AgentsConf
 from lark_agent.conversation import Conversation
+from lark_agent.skills import SkillsRegistry
 
 
 class ProjectStore:
@@ -32,6 +33,9 @@ class Project:
 
     def get_agents_md(self) -> str:
         return AgentsConf(self.path, self.defaults_dir).load()
+
+    def get_skills_registry(self) -> SkillsRegistry:
+        return SkillsRegistry.discover(self.defaults_dir, self.path)
 
     def get_conversation(self, thread_id: str) -> Conversation:
         safe_thread_id = _safe_path_name(thread_id, "thread_id")

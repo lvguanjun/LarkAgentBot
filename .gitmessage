@@ -1,0 +1,37 @@
+# <type>(<scope>): <summary>
+#
+# Match the existing repository style:
+#   feat: add lark agent core conversation slice
+#   test: enable pytest async tests
+#   docs: add project readme
+#   chore(task): archive lark-agent-bot-core
+#   chore: record lark agent core session
+#   init: init repo
+#
+# Subject:
+#   <type>(<optional-scope>): <imperative summary>
+#   Keep it concise and lowercase after the type when natural.
+#
+# Common types:
+#   feat      user-visible feature or capability
+#   fix       bug fix
+#   test      test-only change
+#   docs      documentation-only change
+#   refactor  internal restructure without behavior change
+#   chore     repository, tooling, generated, or Trellis workflow change
+#   init      repository initialization
+#
+# Trellis finish-work sequence:
+#   1. Work commit:      <type>(<scope>): <summary>
+#   2. Archive commit:   chore(task): archive <task-name>
+#   3. Journal commit:   chore: record <session summary>
+#
+# Optional body, when the subject is not enough:
+#   Why:
+#   - ...
+#
+#   What:
+#   - ...
+#
+#   Validation:
+#   - ...

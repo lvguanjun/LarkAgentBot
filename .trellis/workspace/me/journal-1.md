@@ -75,3 +75,36 @@ Planned and implemented the first lark-agent-bot child task: Python package skel
 ### Next Steps
 
 - None - task complete
+
+
+## Session 2: Skills read tool loop
+
+**Date**: 2026-07-04
+**Task**: Skills read tool loop
+**Branch**: `master`
+
+### Summary
+
+Implemented the lark-agent-bot Skills slice: Skills discovery with default/group override, safe read_skill built-in tool, Tier 1 prompt injection, OpenAI-compatible tool loop persistence, focused tests, and backend spec contract updates.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a047b4e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

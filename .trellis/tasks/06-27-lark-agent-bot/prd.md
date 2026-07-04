@@ -12,6 +12,9 @@
 - 飞书 Python SDK `lark-oapi` 支持长连接（WebSocket）和 Webhook 两种消息接收方式
 - MCP (Model Context Protocol) 已有成熟的 Python SDK (`mcp`)
 - Skills 采用 SKILL.md + YAML frontmatter 标准，三层渐进加载
+- `07-04-lark-agent-bot-core` 已归档完成：已交付 Python 包骨架、配置加载、transport-independent 消息模型、路由规则、Project/Conversation 持久化、AGENTS.md fallback、OpenAI 兼容文本对话闭环。
+- `07-04-lark-agent-bot-skills` 已归档完成：已交付 Skills 发现、Tier 1 system prompt 注入、安全 `read_skill` 内置 tool、bounded OpenAI-compatible tool loop，以及 user → assistant(tool_calls) → tool → assistant(final) JSONL 持久化链路。
+- 当前测试基线：`UV_CACHE_DIR=.uv-cache uv run --extra dev pytest` 通过，26 个测试全部通过。
 
 ## Requirements
 
@@ -113,21 +116,30 @@
 ## Acceptance Criteria
 
 - [ ] 机器人启动后能通过 WebSocket 长连接接收飞书消息
-- [ ] 群聊中 @机器人 能触发回复，不 @ 时不响应
-- [ ] 话题内被激活后自动响应后续消息
-- [ ] 私聊中所有消息都响应
-- [ ] 群组拥有独立的 AGENTS.md，内容作为 system prompt 生效
-- [ ] Skills 能被发现（Tier 1 列表注入 system prompt）
-- [ ] LLM 能通过 `read_skill` tool 读取 Skill 完整内容和 references
+- [x] 群聊中 @机器人 能触发回复，不 @ 时不响应（transport-independent core 已验证）
+- [x] 话题内被激活后自动响应后续消息（router/app core 已验证）
+- [x] 私聊中所有消息都响应（router/app core 已验证）
+- [x] 群组拥有独立的 AGENTS.md，内容作为 system prompt 生效
+- [x] Skills 能被发现（Tier 1 列表注入 system prompt）
+- [x] LLM 能通过 `read_skill` tool 读取 Skill 完整内容和 references
 - [ ] MCP tools 能被发现、列举、执行，结果返回给 LLM
-- [ ] 对话历史正确持久化为 JSONL，包含完整 tool_calls 链路
-- [ ] 滑动窗口截断后 LLM 仍能正常工作（不切断 tool 配对）
+- [x] 对话历史正确持久化为 JSONL，包含完整 tool_calls 链路
+- [x] 滑动窗口截断后 LLM 仍能正常工作（不切断 tool 配对）
 - [ ] `/config` 等管理指令可查看/修改群组配置
 
 ## Task Map
 
-- `07-04-lark-agent-bot-core`: first independently verifiable child task. Builds the Python package skeleton, local configuration, transport base types, routing rules, Project/Conversation persistence, AGENTS.md fallback, and a fake-LLM text conversation loop. It intentionally excludes live Feishu WebSocket integration, Skills, MCP, and management commands.
-- `07-04-lark-agent-bot-skills`: second independently verifiable child task. Builds Skills discovery, Tier 1 system prompt injection, the safe `read_skill` built-in tool, and a bounded OpenAI-compatible tool loop that persists user → assistant(tool_calls) → tool → assistant(final). It intentionally excludes live Feishu WebSocket integration, MCP tools, Skills script execution, and management commands.
+- `07-04-lark-agent-bot-core` ✅ archived: first independently verifiable child task. Built the Python package skeleton, local configuration, transport base types, routing rules, Project/Conversation persistence, AGENTS.md fallback, and a fake-LLM text conversation loop. It intentionally excluded live Feishu WebSocket integration, Skills, MCP, and management commands.
+- `07-04-lark-agent-bot-skills` ✅ archived: second independently verifiable child task. Built Skills discovery, Tier 1 system prompt injection, the safe `read_skill` built-in tool, and a bounded OpenAI-compatible tool loop that persists user → assistant(tool_calls) → tool → assistant(final). It intentionally excluded live Feishu WebSocket integration, MCP tools, Skills script execution, and management commands.
+- Recommended next child task: `lark-agent-bot-mcp`. Scope should cover `mcp.yaml` loading/fallback, MCP stdio client lifecycle, MCP tool discovery, conversion to OpenAI function tool schemas, dispatching MCP tool calls through the existing tool loop, JSONL persistence of MCP tool results, fake/in-memory MCP tests, and no live Feishu dependency.
+- Later child tasks: live Feishu WebSocket adapter, then management commands (`/help`, `/config`, `/skill list`, `/mcp list`, `/reset`) once MCP and live transport boundaries exist.
+
+## Current Implementation Snapshot
+
+- Implemented modules: `config.py`, `transport/base.py`, `router.py`, `project.py`, `conversation.py`, `agents_conf.py`, `skills.py`, `tools.py`, `llm_client.py`, `app.py`.
+- Not yet implemented modules: `transport/websocket.py`, `mcp_manager.py`, `commands.py`, `main.py`.
+- The existing app can be tested locally with fake `MessageSender` and fake LLM clients; it does not yet run as a live Feishu bot.
+- The existing OpenAI-compatible LLM path already supports `tools` and assistant `tool_calls`, which makes MCP the lowest-friction next integration.
 
 ## Decisions Log
 

@@ -2,20 +2,29 @@
 
 Lark Agent is a Python package for a Feishu/Lark chat bot core. It maps each
 chat to a project directory, keeps each thread as an independent conversation,
-and prepares the core boundaries needed for project-scoped AI conversations.
+and prepares project-scoped AI conversations with AGENTS.md rules, Skills, and
+OpenAI-compatible tool calling.
 
-The current implementation focuses on the local core:
+The current implementation is a local, transport-independent bot core:
 
 - typed YAML configuration loading from `config.yaml`
 - transport-independent message dataclasses and sender protocol
 - group, private chat, mention, command, and activated-thread routing rules
 - per-chat project directories with `AGENTS.md` fallback loading
 - JSONL conversation history persistence and context windowing
-- injectable OpenAI-compatible LLM client for local tests and future API use
-- `BotApp` orchestration with fake-client test coverage
+- Skills discovery from `data/defaults/skills/` and
+  `data/groups/<chat_id>/skills/`
+- Tier 1 Skills list injection into the system prompt
+- safe built-in `read_skill(name, file?)` tool for SKILL.md and reference files
+- bounded OpenAI-compatible tool loop with complete tool-call persistence
+- injectable fake sender and fake LLM clients for local tests
 
-Live Feishu WebSocket integration, Skills, MCP tools, and management commands
-are planned but not part of the current core slice.
+Live Feishu WebSocket integration, MCP tools, management commands, and a
+runnable `main.py` entrypoint are still planned.
+
+The next recommended implementation slice is MCP tools: load `mcp.yaml`,
+discover MCP tools, convert them to OpenAI-compatible function schemas, and
+dispatch MCP tool calls through the existing tool loop.
 
 ## Requirements
 
@@ -36,9 +45,18 @@ The default configuration lives in `config.yaml`. Runtime data is written under
 ```text
 data/
 ├── defaults/
-│   └── AGENTS.md
+│   ├── AGENTS.md
+│   └── skills/
+│       └── <skill_dir>/
+│           ├── SKILL.md
+│           └── references/
 └── groups/
     └── <chat_id>/
+        ├── AGENTS.md
+        ├── skills/
+        │   └── <skill_dir>/
+        │       ├── SKILL.md
+        │       └── references/
         └── conversations/
             └── <thread_id>/
                 └── history.jsonl
@@ -67,6 +85,27 @@ conversation:
 
 `data/defaults/AGENTS.md` is used as the default system prompt. A chat-specific
 `data/groups/<chat_id>/AGENTS.md` overrides it when present.
+
+## Skills
+
+Skills are read-only instruction packages. Each skill lives in a directory with
+a `SKILL.md` file containing YAML frontmatter:
+
+```markdown
+---
+name: example_skill
+description: Use this when the assistant needs example behavior.
+---
+
+# Example Skill
+
+Skill instructions go here.
+```
+
+Global skills live under `data/defaults/skills/`. Chat-specific skills live
+under `data/groups/<chat_id>/skills/` and override global skills with the same
+skill name. The model first sees only skill names and descriptions, then can
+call `read_skill` to read full instructions or files under `references/`.
 
 ## Tests
 

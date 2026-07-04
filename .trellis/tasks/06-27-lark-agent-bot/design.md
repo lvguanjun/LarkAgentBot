@@ -73,6 +73,13 @@ lark_agent/
 │       └── commands.py         # 斜杠命令处理
 ```
 
+Current code status:
+
+- Present: `config.py`, `transport/base.py`, `router.py`, `project.py`, `conversation.py`, `agents_conf.py`, `skills.py`, `tools.py`, `llm_client.py`, `app.py`.
+- Missing and still planned: `transport/websocket.py`, `mcp_manager.py`, `commands.py`, `main.py`.
+- The current transport boundary is intentionally live-adapter-free: tests exercise the app with fake senders and fake LLM clients.
+- The current tool loop already handles OpenAI-compatible assistant `tool_calls`; MCP should attach to this existing dispatch path instead of creating a parallel LLM loop.
+
 ## Component Design
 
 ### 1. Transport Layer (`transport/`)
@@ -214,6 +221,16 @@ class MCPManager:
         """关闭所有 MCP server 连接"""
 ```
 
+Recommended next implementation boundary:
+
+- Add `mcp_manager.py` behind a small app-facing interface that mirrors `BuiltinTools`:
+  - `get_tools_for_llm() -> list[dict]`
+  - `call_tool(name: str, args: dict) -> str`
+- Keep MCP tool names collision-safe. If OpenAI-facing names need namespacing, use a stable prefix such as `mcp__<server>__<tool>` and decode it inside `MCPManager`.
+- Load MCP config from group `data/groups/<chat_id>/mcp.yaml` with fallback to `data/defaults/mcp.yaml`.
+- Start with stdio transport only, matching the parent PRD. Defer HTTP/SSE and per-user permissioning.
+- Tests should use fake MCP server/session objects and should not require spawning real external processes for the core behavior.
+
 ### 7. Built-in Tools (`tools.py`)
 
 内置 tool 注册与执行。MVP 仅 `read_skill`（专用 tool，零路径注入风险）。
@@ -259,6 +276,11 @@ class BuiltinTools:
             )
         raise ValueError(f"Unknown built-in tool: {name}")
 ```
+
+Current implementation note:
+
+- `BuiltinTools` is implemented and returns structured error text for invalid tool calls instead of raising into the message handler.
+- `BotApp` currently dispatches only built-in tools. The MCP child task should introduce a combined tool dispatcher so built-in and MCP tools share one bounded loop and one JSONL persistence path.
 
 安全模型：LLM 只传 skill name，路径解析在 `SkillsRegistry.read_skill()` 内部完成。
 `read_skill` 内部对 `file` 参数做 `is_relative_to` 检查，防止 `../../` 逃逸出 skill 目录。

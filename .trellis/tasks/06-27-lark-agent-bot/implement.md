@@ -1,70 +1,86 @@
 # Implementation Plan
 
-## Phase 1: 基础骨架
+## Current Status
 
-### 1.1 项目初始化
-- [ ] 创建 `pyproject.toml`，声明依赖：`lark-oapi`, `openai`, `mcp`, `pyyaml`
-- [ ] 创建包结构 `src/lark_agent/`
-- [ ] 创建全局配置 `config.yaml` 和 `src/lark_agent/config.py`
+This parent task remains in `planning`, with implementation delivered through independently verifiable child tasks.
 
-### 1.2 Transport Layer
-- [ ] `transport/base.py`: `IncomingMessage` 数据类 + `MessageSender` 协议
-- [ ] `transport/websocket.py`: 飞书 WebSocket 长连接实现
-- [ ] 验证：能收到飞书消息并打印
+Completed child tasks:
 
-### 1.3 消息路由
-- [ ] `router.py`: 触发规则判断 (@ 检测、话题激活状态、私聊识别)
-- [ ] 验证：群聊 @时响应，不 @时忽略
+- [x] `07-04-lark-agent-bot-core`: package skeleton, config loading, transport base types, routing rules, Project/Conversation persistence, AGENTS.md fallback, fake-LLM text conversation loop.
+- [x] `07-04-lark-agent-bot-skills`: Skills discovery, Tier 1 prompt injection, safe `read_skill` built-in tool, bounded OpenAI-compatible tool loop, complete tool-call JSONL persistence.
 
-## Phase 2: 核心对话能力
+Current verification:
 
-### 2.1 Project & Conversation
-- [ ] `project.py`: Project 类，管理群组目录和配置 fallback
-- [ ] `conversation.py`: JSONL 读写、滑动窗口截断（按完整轮次）
-- [ ] `agents_conf.py`: AGENTS.md 加载
+```bash
+UV_CACHE_DIR=.uv-cache uv run --extra dev pytest
+# 26 passed
+```
 
-### 2.2 LLM Client
-- [ ] `llm_client.py`: OpenAI 兼容 API 调用，含 tool 循环
-- [ ] 验证：能与 LLM 对话，history 正确持久化
+## Completed Capabilities
 
-### 2.3 端到端对话
-- [ ] `main.py`: 串联所有组件
-- [ ] 验证：飞书中 @机器人能完成多轮对话，话题内上下文保持
+- [x] `pyproject.toml` declares Python 3.11+ and dependencies: `lark-oapi`, `openai`, `mcp`, `pyyaml`.
+- [x] `config.yaml` and `src/lark_agent/config.py` provide typed local config loading.
+- [x] `transport/base.py` defines `IncomingMessage`, text/image content parts, and `MessageSender`.
+- [x] `router.py` implements private chat, group mention, activated thread, and command-boundary routing.
+- [x] `project.py` maps `chat_id` to `data/groups/<chat_id>/`.
+- [x] `conversation.py` persists OpenAI messages as JSONL and windows history without splitting tool_call/tool result pairs.
+- [x] `agents_conf.py` loads group `AGENTS.md` with fallback to `data/defaults/AGENTS.md`.
+- [x] `skills.py` discovers global/group Skills and handles group override semantics.
+- [x] `tools.py` exposes the safe `read_skill(name, file?)` built-in tool.
+- [x] `llm_client.py` supports OpenAI-compatible chat completions with optional tools.
+- [x] `app.py` orchestrates router, project, conversation, prompt construction, bounded tool loop, persistence, and sender reply.
 
-## Phase 3: Skills & MCP
+## Remaining Work
 
-### 3.1 Skills
-- [ ] `skills.py`: SKILL.md frontmatter 解析、三层加载、system prompt 注入
-- [ ] 创建 `data/defaults/skills/` 示例 skill
-- [ ] 验证：skills 列表出现在 system prompt，LLM 可引用
+### Next Recommended Child: MCP Tools
 
-### 3.2 MCP
 - [ ] `mcp_manager.py`: MCP Client 连接管理、tools 发现、tool 执行
-- [ ] tools → OpenAI function 格式转换
-- [ ] 验证：配置 MCP server 后 LLM 能调用工具
+- [ ] `mcp.yaml` loading with group override and defaults fallback.
+- [ ] Convert MCP tool schemas to OpenAI-compatible function tool schemas.
+- [ ] Combine built-in `read_skill` tools and MCP tools in one dispatcher.
+- [ ] Execute MCP tool calls from the existing bounded tool loop.
+- [ ] Persist assistant(tool_calls), MCP tool result, and assistant(final) in the existing JSONL format.
+- [ ] Add fake/in-memory MCP tests; avoid requiring real external MCP server processes for unit tests.
 
-## Phase 4: 管理指令
+### Later Child: Live Feishu Transport
 
-### 4.1 Commands
+- [ ] `transport/websocket.py`: 飞书 WebSocket 长连接实现
+- [ ] Convert Feishu text/post/image message events into `IncomingMessage`.
+- [ ] Send text replies into the correct chat/thread using `MessageSender`.
+- [ ] Add integration-friendly tests around event conversion and sender payload construction.
+
+### Later Child: Management Commands
+
 - [ ] `commands.py`: `/help`, `/config`, `/skill list`, `/mcp list`, `/reset`
-- [ ] 验证：管理指令能正确执行并返回结果
+- [ ] Route commands after mention/private-chat trigger rules but before LLM handling.
+- [ ] Keep command behavior local and deterministic; avoid invoking LLM for management responses.
+
+### Later Polish
+
+- [ ] `main.py`: runnable bot entrypoint once live transport exists.
+- [ ] README examples for live Feishu setup and MCP config once those features exist.
 
 ## Validation Commands
 
 ```bash
-# 安装依赖
-pip install -e .
-
-# 启动机器人
-python -m lark_agent.main
-
-# 验证配置
-python -c "from lark_agent.config import load_config; print(load_config())"
+UV_CACHE_DIR=.uv-cache uv run --extra dev pytest
+UV_CACHE_DIR=.uv-cache uv run --extra dev python -m compileall src
+git status --short
 ```
 
 ## Risky Areas
 
+- MCP stdio transport 的进程管理（子进程生命周期、异常处理、shutdown cleanup）
+- MCP/OpenAI tool name collisions between servers or between MCP and built-in tools
+- MCP tool schema conversion fidelity, especially required fields and nested JSON schema
+- Ensuring MCP tool failures become model-readable tool result text rather than crashing `BotApp`
 - 飞书 WebSocket 长连接的稳定性和重连机制
-- MCP stdio transport 的进程管理（子进程生命周期、异常处理）
-- 滑动窗口截断 tool_call/tool_result 配对的边界情况
 - 并发消息处理（同一话题多人同时发消息）
+
+## Ready Check Before Starting the MCP Child
+
+- [ ] Create a child task for MCP, or update an existing one if already present.
+- [ ] Keep the child independently verifiable without live Feishu credentials.
+- [ ] Write child dependencies explicitly: it depends on archived `lark-agent-bot-core` and `lark-agent-bot-skills`.
+- [ ] Because current workflow is inline mode, skip `implement.jsonl` / `check.jsonl` curation.
+- [ ] Ask for review before running `task.py start`.

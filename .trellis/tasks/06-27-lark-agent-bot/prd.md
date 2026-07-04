@@ -124,6 +124,10 @@
 - [ ] 滑动窗口截断后 LLM 仍能正常工作（不切断 tool 配对）
 - [ ] `/config` 等管理指令可查看/修改群组配置
 
+## Task Map
+
+- `07-04-lark-agent-bot-core`: first independently verifiable child task. Builds the Python package skeleton, local configuration, transport base types, routing rules, Project/Conversation persistence, AGENTS.md fallback, and a fake-LLM text conversation loop. It intentionally excludes live Feishu WebSocket integration, Skills, MCP, and management commands.
+
 ## Decisions Log
 
 ### D1: 内置 Tools — MVP 专用 `read_skill` ✅ 已决策

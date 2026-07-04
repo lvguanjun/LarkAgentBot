@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lark-agent"
+version = "0.1.0"
+description = "Lark chat bot core for project-scoped AI conversations"
+requires-python = ">=3.11"
+dependencies = [
+    "lark-oapi>=1.4.0",
+    "mcp>=1.0.0",
+    "openai>=1.0.0",
+    "PyYAML>=6.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

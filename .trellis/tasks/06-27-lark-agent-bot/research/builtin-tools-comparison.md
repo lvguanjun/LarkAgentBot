@@ -185,7 +185,7 @@ Layer 1-2 是所有编程 Agent 的基础，Layer 3-4 是增强层。
 - 不需要 `apply_patch`（bot 不写代码）
 - 不需要 `subagent`（单 agent 够用）
 
-### MVP 内置 tool 建议
+### MVP 内置 tool 建议（调研初稿）
 
 ```
 MVP:   read_file(path)  — scoped 到 project 目录，用于读取 Skills / references
@@ -194,6 +194,17 @@ V3:    按需扩展（web_search、subagent 等）
 ```
 
 域能力（查数据库、调 API、发通知等）全部通过 MCP tools 提供，不内置。
+
+### 最终收敛决策
+
+后续 PRD/Design 已将 MVP 内置 tool 从通用 `read_file(path)` 收敛为专用
+`read_skill(name, file?)`：
+
+- `read_file(path)` 虽然通用，但 project 目录同时包含 `config.yaml`、`mcp.yaml`
+  和 `conversations/` 等敏感或内部状态文件，MVP 无沙箱时安全面过大。
+- `read_skill(name, file?)` 只暴露 skill name 和 skill 内 reference 文件读取能力，
+  路径解析由应用内部完成，更符合 MVP 的只读 Skills 目标。
+- `exec`、通用 `read_file`、写文件和搜索能力保留到具备沙箱与权限策略后的 V2+。
 
 ### 可借鉴的设计
 

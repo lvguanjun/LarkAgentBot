@@ -1,0 +1,14 @@
+data_dir: data
+
+lark:
+  app_id: ""
+  app_secret: ""
+  bot_id: ""
+
+llm:
+  base_url: ""
+  api_key: ""
+  model: gpt-4.1-mini
+
+conversation:
+  max_messages: 40

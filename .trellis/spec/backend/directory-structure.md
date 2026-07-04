@@ -6,49 +6,55 @@
 
 ## Overview
 
-<!--
-Document your project's backend directory structure here.
-
-Questions to answer:
-- How are modules/packages organized?
-- Where does business logic live?
-- Where are API endpoints defined?
-- How are utilities and helpers organized?
--->
-
-(To be filled by the team)
+The backend is a Python package under `src/lark_agent/`. The package keeps
+transport adapters at the edge and core conversation behavior in small modules
+that can be tested without live Feishu, OpenAI, Skills, or MCP services.
 
 ---
 
 ## Directory Layout
 
 ```
-<!-- Replace with your actual structure -->
 src/
-├── ...
-└── ...
+└── lark_agent/
+    ├── app.py              # Application orchestration
+    ├── config.py           # Typed YAML configuration loading
+    ├── agents_conf.py      # AGENTS.md fallback loading
+    ├── conversation.py     # JSONL history persistence and context windowing
+    ├── llm_client.py       # OpenAI-compatible client wrapper
+    ├── project.py          # chat_id -> Project and conversation paths
+    ├── router.py           # Trigger rules and thread activation state
+    └── transport/
+        └── base.py         # Internal transport boundary dataclasses/protocols
 ```
 
 ---
 
 ## Module Organization
 
-<!-- How should new features/modules be organized? -->
-
-(To be filled by the team)
+- Keep external SDK-specific code in adapter modules, not in core logic. For
+  example, future `lark-oapi` WebSocket code belongs under `transport/`, while
+  tests should exercise `IncomingMessage` from `transport/base.py`.
+- Put one cross-layer contract owner next to the data it owns:
+  `conversation.py` owns history JSONL message grouping, `project.py` owns
+  filesystem path layout, and `config.py` owns YAML decoding.
+- Prefer constructor injection for external clients (`LLMClient`, sender
+  protocols) so tests can use fakes without network or credentials.
 
 ---
 
 ## Naming Conventions
 
-<!-- File and folder naming rules -->
-
-(To be filled by the team)
+- Use lowercase snake_case module names.
+- Runtime group data lives under `data/groups/<chat_id>/`.
+- Default project resources live under `data/defaults/`.
+- Conversation history paths must follow
+  `data/groups/<chat_id>/conversations/<thread_id>/history.jsonl`.
 
 ---
 
 ## Examples
 
-<!-- Link to well-organized modules as examples -->
-
-(To be filled by the team)
+- `src/lark_agent/transport/base.py`: stable boundary types without SDK imports.
+- `src/lark_agent/conversation.py`: JSONL persistence and windowing owned in one
+  module instead of repeated parsing in consumers.

@@ -67,7 +67,7 @@ lark_agent/
 │       ├── conversation.py     # 对话上下文管理
 │       ├── agents_conf.py      # AGENTS.md 加载
 │       ├── skills.py           # Skills 发现 & 元信息加载（只读）
-│       ├── tools.py            # 内置 tools（MVP: read_file）
+│       ├── tools.py            # 内置 tools（MVP: read_skill）
 │       ├── mcp_manager.py      # MCP Client 管理
 │       ├── llm_client.py       # LLM 调用（含 tool loop）
 │       └── commands.py         # 斜杠命令处理

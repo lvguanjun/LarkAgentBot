@@ -6,6 +6,10 @@ from pathlib import Path
 import yaml
 
 
+AGENTS_DIR = ".agents"
+SKILLS_DIR = "skills"
+
+
 @dataclass(frozen=True)
 class SkillMeta:
     name: str
@@ -29,7 +33,7 @@ class SkillsRegistry:
         skills: dict[str, SkillMeta] = {}
         errors: list[SkillLoadError] = []
 
-        for skills_dir in (defaults_dir / "skills", project_dir / "skills"):
+        for skills_dir in (_skills_dir(defaults_dir), _skills_dir(project_dir)):
             discovered, load_errors = _discover_dir(skills_dir)
             skills.update(discovered)
             errors.extend(load_errors)
@@ -67,6 +71,10 @@ class SkillsRegistry:
         references_dir = skill.skill_dir / "references"
         path = skill.skill_dir / file
         return _read_resolved_file(path, references_dir)
+
+
+def _skills_dir(project_root: Path) -> Path:
+    return project_root / AGENTS_DIR / SKILLS_DIR
 
 
 def _discover_dir(skills_dir: Path) -> tuple[dict[str, SkillMeta], list[SkillLoadError]]:

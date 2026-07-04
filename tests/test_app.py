@@ -74,6 +74,10 @@ def write_skill(root: Path, dirname: str, *, name: str, description: str, body: 
     return skill_dir
 
 
+def skills_root(project_root: Path) -> Path:
+    return project_root / ".agents" / "skills"
+
+
 async def test_app_handles_text_message_end_to_end(tmp_path: Path) -> None:
     defaults = tmp_path / "defaults"
     defaults.mkdir()
@@ -179,7 +183,7 @@ async def test_app_injects_agents_and_skills_without_full_skill_body(tmp_path: P
     defaults.mkdir()
     (defaults / "AGENTS.md").write_text("system prompt", encoding="utf-8")
     write_skill(
-        defaults / "skills",
+        skills_root(defaults),
         "writer",
         name="writer",
         description="Writes concise docs",
@@ -215,7 +219,7 @@ async def test_app_runs_read_skill_tool_loop_and_persists_full_chain(tmp_path: P
     defaults.mkdir()
     (defaults / "AGENTS.md").write_text("system prompt", encoding="utf-8")
     write_skill(
-        defaults / "skills",
+        skills_root(defaults),
         "writer",
         name="writer",
         description="Writes concise docs",

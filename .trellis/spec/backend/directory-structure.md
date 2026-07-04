@@ -48,6 +48,13 @@ src/
 - Use lowercase snake_case module names.
 - Runtime group data lives under `data/groups/<chat_id>/`.
 - Default project resources live under `data/defaults/`.
+- Agent assets live under `.agents/` below the default or group root:
+  `data/defaults/.agents/skills/`,
+  `data/defaults/.agents/mcp.yaml`,
+  `data/groups/<chat_id>/.agents/skills/`, and
+  `data/groups/<chat_id>/.agents/mcp.yaml`.
+- `AGENTS.md` stays at the default or group root. Conversation history stays
+  under `data/groups/<chat_id>/conversations/`.
 - Conversation history paths must follow
   `data/groups/<chat_id>/conversations/<thread_id>/history.jsonl`.
 

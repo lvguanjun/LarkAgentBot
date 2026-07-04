@@ -12,8 +12,8 @@ The current implementation is a local, transport-independent bot core:
 - group, private chat, mention, command, and activated-thread routing rules
 - per-chat project directories with `AGENTS.md` fallback loading
 - JSONL conversation history persistence and context windowing
-- Skills discovery from `data/defaults/skills/` and
-  `data/groups/<chat_id>/skills/`
+- Skills discovery from `data/defaults/.agents/skills/` and
+  `data/groups/<chat_id>/.agents/skills/`
 - Tier 1 Skills list injection into the system prompt
 - safe built-in `read_skill(name, file?)` tool for SKILL.md and reference files
 - bounded OpenAI-compatible tool loop with complete tool-call persistence
@@ -22,7 +22,7 @@ The current implementation is a local, transport-independent bot core:
 Live Feishu WebSocket integration, MCP tools, management commands, and a
 runnable `main.py` entrypoint are still planned.
 
-The next recommended implementation slice is MCP tools: load `mcp.yaml`,
+The next recommended implementation slice is MCP tools: load `.agents/mcp.yaml`,
 discover MCP tools, convert them to OpenAI-compatible function schemas, and
 dispatch MCP tool calls through the existing tool loop.
 
@@ -46,17 +46,21 @@ The default configuration lives in `config.yaml`. Runtime data is written under
 data/
 ├── defaults/
 │   ├── AGENTS.md
-│   └── skills/
-│       └── <skill_dir>/
-│           ├── SKILL.md
-│           └── references/
+│   └── .agents/
+│       ├── skills/
+│       │   └── <skill_dir>/
+│       │       ├── SKILL.md
+│       │       └── references/
+│       └── mcp.yaml
 └── groups/
     └── <chat_id>/
         ├── AGENTS.md
-        ├── skills/
-        │   └── <skill_dir>/
-        │       ├── SKILL.md
-        │       └── references/
+        ├── .agents/
+        │   ├── skills/
+        │   │   └── <skill_dir>/
+        │   │       ├── SKILL.md
+        │   │       └── references/
+        │   └── mcp.yaml
         └── conversations/
             └── <thread_id>/
                 └── history.jsonl
@@ -102,10 +106,11 @@ description: Use this when the assistant needs example behavior.
 Skill instructions go here.
 ```
 
-Global skills live under `data/defaults/skills/`. Chat-specific skills live
-under `data/groups/<chat_id>/skills/` and override global skills with the same
-skill name. The model first sees only skill names and descriptions, then can
-call `read_skill` to read full instructions or files under `references/`.
+Global skills live under `data/defaults/.agents/skills/`. Chat-specific skills
+live under `data/groups/<chat_id>/.agents/skills/` and override global skills
+with the same skill name. The model first sees only skill names and
+descriptions, then can call `read_skill` to read full instructions or files
+under `references/`.
 
 ## Tests
 

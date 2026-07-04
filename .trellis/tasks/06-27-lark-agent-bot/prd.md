@@ -43,13 +43,14 @@
   ```
   data/groups/<chat_id>/
     AGENTS.md          # 系统规则 (system prompt)
-    skills/            # 该群的技能目录
-      <skill_name>/
-        SKILL.md
-    mcp.yaml           # MCP server 配置
     config.yaml        # 群组级 LLM 配置（可选，覆盖全局）
+    .agents/           # Agent assets
+      skills/          # 该群的技能目录
+        <skill_name>/
+          SKILL.md
+      mcp.yaml         # MCP server 配置
   ```
-- 全局默认配置在 `data/defaults/` 下
+- 全局默认配置在 `data/defaults/` 下，默认 Skills 和 MCP 配置在 `data/defaults/.agents/` 下
 - 群组配置未设置的项 fallback 到全局默认
 
 ### R4: AGENTS.md 支持
@@ -72,7 +73,7 @@
 ### R6: MCP 支持
 
 - 使用官方 `mcp` Python SDK 作为 MCP Client
-- 通过 `mcp.yaml` 配置 MCP servers（支持 stdio transport）
+- 通过 `.agents/mcp.yaml` 配置 MCP servers（支持 stdio transport）
 - 启动时连接配置的 MCP servers，获取 tools 列表
 - 将 MCP tools 转换为 OpenAI function calling 格式注入 LLM
 - LLM 返回 tool_calls 时，通过 MCP Client 执行并返回结果
@@ -131,7 +132,8 @@
 
 - `07-04-lark-agent-bot-core` ✅ archived: first independently verifiable child task. Built the Python package skeleton, local configuration, transport base types, routing rules, Project/Conversation persistence, AGENTS.md fallback, and a fake-LLM text conversation loop. It intentionally excluded live Feishu WebSocket integration, Skills, MCP, and management commands.
 - `07-04-lark-agent-bot-skills` ✅ archived: second independently verifiable child task. Built Skills discovery, Tier 1 system prompt injection, the safe `read_skill` built-in tool, and a bounded OpenAI-compatible tool loop that persists user → assistant(tool_calls) → tool → assistant(final). It intentionally excluded live Feishu WebSocket integration, MCP tools, Skills script execution, and management commands.
-- Recommended next child task: `lark-agent-bot-mcp`. Scope should cover `mcp.yaml` loading/fallback, MCP stdio client lifecycle, MCP tool discovery, conversion to OpenAI function tool schemas, dispatching MCP tool calls through the existing tool loop, JSONL persistence of MCP tool results, fake/in-memory MCP tests, and no live Feishu dependency.
+- `07-04-lark-agent-bot-agents-layout` ✅ complete: lightweight child task that moved Skills discovery and MCP planning paths under each project `.agents/` directory instead of placing them directly in the chat group root.
+- Recommended next child task: `lark-agent-bot-mcp`. Scope should cover `.agents/mcp.yaml` loading/fallback, MCP stdio client lifecycle, MCP tool discovery, conversion to OpenAI function tool schemas, dispatching MCP tool calls through the existing tool loop, JSONL persistence of MCP tool results, fake/in-memory MCP tests, and no live Feishu dependency.
 - Later child tasks: live Feishu WebSocket adapter, then management commands (`/help`, `/config`, `/skill list`, `/mcp list`, `/reset`) once MCP and live transport boundaries exist.
 
 ## Current Implementation Snapshot

@@ -150,8 +150,10 @@ LLMClient.complete_message(
 
 ### 3. Contracts
 
-- Discovery reads `data/defaults/skills/<dir>/SKILL.md` and
-  `data/groups/<chat_id>/skills/<dir>/SKILL.md`.
+- Discovery reads `data/defaults/.agents/skills/<dir>/SKILL.md` and
+  `data/groups/<chat_id>/.agents/skills/<dir>/SKILL.md`.
+- Direct `data/defaults/skills/` and `data/groups/<chat_id>/skills/`
+  directories are not fallback locations.
 - `SKILL.md` must contain YAML frontmatter with non-empty string `name` and
   `description`.
 - The frontmatter `name` is the LLM-facing identifier. Directory names are only

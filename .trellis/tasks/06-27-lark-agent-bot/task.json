@@ -20,7 +20,8 @@
   "subtasks": [],
   "children": [
     "07-04-lark-agent-bot-core",
-    "07-04-lark-agent-bot-skills"
+    "07-04-lark-agent-bot-skills",
+    "07-04-lark-agent-bot-agents-layout"
   ],
   "parent": null,
   "relatedFiles": [],

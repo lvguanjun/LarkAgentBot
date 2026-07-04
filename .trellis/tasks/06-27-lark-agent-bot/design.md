@@ -34,7 +34,7 @@
 │  ┌──────────────────────────────────────┐        │
 │  │         ProjectStore (文件系统)       │        │
 │  │  data/groups/<chat_id>/              │        │
-│  │    AGENTS.md | skills/ | mcp.yaml    │        │
+│  │    AGENTS.md | .agents/ | conversations/ │    │
 │  │    conversations/<thread_id>/        │        │
 │  └──────────────────────────────────────┘        │
 └─────────────────────────────────────────────────┘
@@ -49,10 +49,17 @@ lark_agent/
 ├── data/
 │   ├── defaults/               # 全局默认配置
 │   │   ├── AGENTS.md
-│   │   ├── skills/
-│   │   └── mcp.yaml
+│   │   └── .agents/
+│   │       ├── skills/
+│   │       └── mcp.yaml
 │   └── groups/                 # 群组数据（运行时生成）
 │       └── <chat_id>/
+│           ├── AGENTS.md
+│           ├── config.yaml
+│           ├── .agents/
+│           │   ├── skills/
+│           │   └── mcp.yaml
+│           └── conversations/
 ├── src/
 │   └── lark_agent/
 │       ├── __init__.py
@@ -227,7 +234,7 @@ Recommended next implementation boundary:
   - `get_tools_for_llm() -> list[dict]`
   - `call_tool(name: str, args: dict) -> str`
 - Keep MCP tool names collision-safe. If OpenAI-facing names need namespacing, use a stable prefix such as `mcp__<server>__<tool>` and decode it inside `MCPManager`.
-- Load MCP config from group `data/groups/<chat_id>/mcp.yaml` with fallback to `data/defaults/mcp.yaml`.
+- Load MCP config from group `data/groups/<chat_id>/.agents/mcp.yaml` with fallback to `data/defaults/.agents/mcp.yaml`.
 - Start with stdio transport only, matching the parent PRD. Defer HTTP/SSE and per-user permissioning.
 - Tests should use fake MCP server/session objects and should not require spawning real external processes for the core behavior.
 

@@ -8,6 +8,7 @@ Completed child tasks:
 
 - [x] `07-04-lark-agent-bot-core`: package skeleton, config loading, transport base types, routing rules, Project/Conversation persistence, AGENTS.md fallback, fake-LLM text conversation loop.
 - [x] `07-04-lark-agent-bot-skills`: Skills discovery, Tier 1 prompt injection, safe `read_skill` built-in tool, bounded OpenAI-compatible tool loop, complete tool-call JSONL persistence.
+- [x] `07-04-lark-agent-bot-agents-layout`: moved Skills and MCP agent asset contracts under project `.agents/` directories.
 
 Current verification:
 
@@ -35,7 +36,7 @@ UV_CACHE_DIR=.uv-cache uv run --extra dev pytest
 ### Next Recommended Child: MCP Tools
 
 - [ ] `mcp_manager.py`: MCP Client 连接管理、tools 发现、tool 执行
-- [ ] `mcp.yaml` loading with group override and defaults fallback.
+- [ ] `.agents/mcp.yaml` loading with group override and defaults fallback.
 - [ ] Convert MCP tool schemas to OpenAI-compatible function tool schemas.
 - [ ] Combine built-in `read_skill` tools and MCP tools in one dispatcher.
 - [ ] Execute MCP tool calls from the existing bounded tool loop.

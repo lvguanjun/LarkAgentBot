@@ -19,3 +19,17 @@ If you're using Codex or another agent-capable tool, additional project-scoped h
 Managed by Trellis. Edits outside this block are preserved; edits inside may be overwritten by a future `trellis update`.
 
 <!-- TRELLIS:END -->
+
+## When Writing Documentation
+
+If the documentation is intended for humans, write it in **Chinese**. If the documentation is intended for machines, write it in **English**.
+
+- `prd.md` or `design.md` will be reviewed/approved by a human → Write it in Chinese
+- Content is only injected into agents, manifests, or machine-oriented context → English is acceptable
+- Unsure who reads it → Treat it as human-reviewed and write Chinese
+
+
+## Code Style
+
+- Use src layout python package structure
+- Always use absolute imports

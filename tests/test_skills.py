@@ -4,6 +4,10 @@ from lark_agent.skills import SkillsRegistry
 from lark_agent.tools import BuiltinTools
 
 
+def skills_root(project_root: Path) -> Path:
+    return project_root / ".agents" / "skills"
+
+
 def write_skill(root: Path, dirname: str, *, name: str, description: str, body: str = "body") -> Path:
     skill_dir = root / dirname
     skill_dir.mkdir(parents=True)
@@ -16,7 +20,7 @@ def write_skill(root: Path, dirname: str, *, name: str, description: str, body: 
 
 def test_discovers_default_skills_from_frontmatter(tmp_path: Path) -> None:
     defaults = tmp_path / "defaults"
-    write_skill(defaults / "skills", "writer", name="writing-helper", description="Helps write docs")
+    write_skill(skills_root(defaults), "writer", name="writing-helper", description="Helps write docs")
 
     registry = SkillsRegistry.discover(defaults, tmp_path / "groups" / "chat-1")
 
@@ -24,15 +28,15 @@ def test_discovers_default_skills_from_frontmatter(tmp_path: Path) -> None:
     assert list(registry.skills) == ["writing-helper"]
     skill = registry.skills["writing-helper"]
     assert skill.description == "Helps write docs"
-    assert skill.skill_dir == defaults / "skills" / "writer"
+    assert skill.skill_dir == skills_root(defaults) / "writer"
 
 
 def test_group_skills_override_defaults_by_frontmatter_name(tmp_path: Path) -> None:
     defaults = tmp_path / "defaults"
     project = tmp_path / "groups" / "chat-1"
-    write_skill(defaults / "skills", "default-writer", name="writer", description="Default writer")
-    write_skill(defaults / "skills", "default-reviewer", name="reviewer", description="Default reviewer")
-    override_dir = write_skill(project / "skills", "custom-writer", name="writer", description="Group writer")
+    write_skill(skills_root(defaults), "default-writer", name="writer", description="Default writer")
+    write_skill(skills_root(defaults), "default-reviewer", name="reviewer", description="Default reviewer")
+    override_dir = write_skill(skills_root(project), "custom-writer", name="writer", description="Group writer")
 
     registry = SkillsRegistry.discover(defaults, project)
 
@@ -44,7 +48,7 @@ def test_group_skills_override_defaults_by_frontmatter_name(tmp_path: Path) -> N
 
 def test_invalid_skill_metadata_is_reported_and_skipped(tmp_path: Path) -> None:
     defaults = tmp_path / "defaults"
-    invalid_dir = defaults / "skills" / "invalid"
+    invalid_dir = skills_root(defaults) / "invalid"
     invalid_dir.mkdir(parents=True)
     (invalid_dir / "SKILL.md").write_text("---\nname: broken\n---\n\n# Broken\n", encoding="utf-8")
 
@@ -59,7 +63,7 @@ def test_invalid_skill_metadata_is_reported_and_skipped(tmp_path: Path) -> None:
 def test_system_prompt_fragment_lists_only_tier_one_metadata(tmp_path: Path) -> None:
     defaults = tmp_path / "defaults"
     write_skill(
-        defaults / "skills",
+        skills_root(defaults),
         "writer",
         name="writer",
         description="Writes docs",
@@ -73,9 +77,21 @@ def test_system_prompt_fragment_lists_only_tier_one_metadata(tmp_path: Path) -> 
     assert "SECRET FULL BODY" not in fragment
 
 
+def test_direct_skills_directories_are_not_discovered(tmp_path: Path) -> None:
+    defaults = tmp_path / "defaults"
+    project = tmp_path / "groups" / "chat-1"
+    write_skill(defaults / "skills", "default-writer", name="writer", description="Default writer")
+    write_skill(project / "skills", "group-reviewer", name="reviewer", description="Group reviewer")
+
+    registry = SkillsRegistry.discover(defaults, project)
+
+    assert registry.skills == {}
+    assert registry.errors == []
+
+
 async def test_builtin_tool_reads_skill_and_reference_file(tmp_path: Path) -> None:
     defaults = tmp_path / "defaults"
-    skill_dir = write_skill(defaults / "skills", "writer", name="writer", description="Writes docs")
+    skill_dir = write_skill(skills_root(defaults), "writer", name="writer", description="Writes docs")
     references = skill_dir / "references"
     references.mkdir()
     (references / "style.md").write_text("# Style\n\nBe concise.\n", encoding="utf-8")
@@ -90,7 +106,7 @@ async def test_builtin_tool_reads_skill_and_reference_file(tmp_path: Path) -> No
 
 async def test_read_skill_rejects_unsafe_reference_paths(tmp_path: Path) -> None:
     defaults = tmp_path / "defaults"
-    skill_dir = write_skill(defaults / "skills", "writer", name="writer", description="Writes docs")
+    skill_dir = write_skill(skills_root(defaults), "writer", name="writer", description="Writes docs")
     references = skill_dir / "references"
     references.mkdir()
     outside = tmp_path / "outside.md"

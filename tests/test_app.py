@@ -1,4 +1,3 @@
-import asyncio
 from pathlib import Path
 
 from lark_agent.app import BotApp
@@ -48,11 +47,7 @@ def make_config(tmp_path: Path) -> AppConfig:
     )
 
 
-def test_app_handles_text_message_end_to_end(tmp_path: Path) -> None:
-    asyncio.run(_app_handles_text_message_end_to_end(tmp_path))
-
-
-async def _app_handles_text_message_end_to_end(tmp_path: Path) -> None:
+async def test_app_handles_text_message_end_to_end(tmp_path: Path) -> None:
     defaults = tmp_path / "defaults"
     defaults.mkdir()
     (defaults / "AGENTS.md").write_text("system prompt", encoding="utf-8")
@@ -94,11 +89,7 @@ async def _app_handles_text_message_end_to_end(tmp_path: Path) -> None:
     ]
 
 
-def test_app_ignores_unmentioned_group_message(tmp_path: Path) -> None:
-    asyncio.run(_app_ignores_unmentioned_group_message(tmp_path))
-
-
-async def _app_ignores_unmentioned_group_message(tmp_path: Path) -> None:
+async def test_app_ignores_unmentioned_group_message(tmp_path: Path) -> None:
     sender = FakeSender()
     fake_llm = FakeLLM("assistant reply")
     app = BotApp(
@@ -120,11 +111,7 @@ async def _app_ignores_unmentioned_group_message(tmp_path: Path) -> None:
     assert fake_llm.calls == []
 
 
-def test_app_skips_management_command_boundary(tmp_path: Path) -> None:
-    asyncio.run(_app_skips_management_command_boundary(tmp_path))
-
-
-async def _app_skips_management_command_boundary(tmp_path: Path) -> None:
+async def test_app_skips_management_command_boundary(tmp_path: Path) -> None:
     sender = FakeSender()
     fake_llm = FakeLLM("assistant reply")
     app = BotApp(

@@ -42,3 +42,36 @@
 3. 确认 Docker 策略后，重写 design.md 的 Tool/Sandbox 架构
 
 ---
+
+
+## Session 1: Lark agent core conversation slice
+
+**Date**: 2026-07-04
+**Task**: Lark agent core conversation slice
+**Branch**: `master`
+
+### Summary
+
+Planned and implemented the first lark-agent-bot child task: Python package skeleton, uv-based validation, config loading, transport boundary dataclasses, router trigger rules, AGENTS.md fallback, JSONL conversation persistence/windowing, injectable OpenAI-compatible LLM client, BotApp orchestration, and 18 unit tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b491f07` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

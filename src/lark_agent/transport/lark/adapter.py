@@ -48,6 +48,7 @@ class LarkMessageEventAdapter:
             return None
 
         root_id = _string_attr(message, "root_id") or None
+        thread_id = _string_attr(message, "thread_id") or None
         return IncomingMessage(
             message_id=message_id,
             chat_id=chat_id,
@@ -56,6 +57,7 @@ class LarkMessageEventAdapter:
             content=parts,
             mentions=_mention_ids(getattr(message, "mentions", None)),
             root_id=root_id,
+            thread_id=thread_id,
             raw_event=event,
         )
 

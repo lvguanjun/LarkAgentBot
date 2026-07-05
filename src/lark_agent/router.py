@@ -5,7 +5,6 @@ import re
 from lark_agent.transport.base import IncomingMessage, MentionPart, TextPart, content_part_text
 
 
-MAIN_THREAD_ID = "main"
 LEADING_MENTION_TOKEN_RE = re.compile(r"^(?:\s*@_user_\d+\s*)+")
 
 
@@ -19,7 +18,7 @@ class MessageRouter:
             return True
         if self.is_bot_mentioned(message):
             return True
-        if message.root_id and self.is_thread_activated(message.chat_id, message.root_id):
+        if message.thread_id and self.is_thread_activated(message.chat_id, message.thread_id):
             return True
         return False
 
@@ -32,12 +31,8 @@ class MessageRouter:
     def is_thread_activated(self, chat_id: str, thread_id: str) -> bool:
         return (chat_id, thread_id) in self._activated_threads
 
-    def get_thread_id(self, message: IncomingMessage) -> str:
-        if message.root_id:
-            return message.root_id
-        if message.chat_type == "p2p":
-            return message.chat_id
-        return MAIN_THREAD_ID
+    def get_existing_thread_id(self, message: IncomingMessage) -> str | None:
+        return message.thread_id
 
     def is_command(self, message: IncomingMessage) -> bool:
         text = self.normalized_text_content(message).lstrip()

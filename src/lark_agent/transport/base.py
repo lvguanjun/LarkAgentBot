@@ -122,6 +122,7 @@ class IncomingMessage:
     content: list[ContentPart]
     mentions: list[str] = field(default_factory=list)
     root_id: str | None = None
+    thread_id: str | None = None
     raw_event: Any = None
 
     def text_content(self) -> str:
@@ -192,5 +193,13 @@ class MessageSender(Protocol):
         *,
         root_id: str | None = None,
         reply_to_message_id: str | None = None,
-    ) -> None:
+        reply_in_thread: bool = False,
+    ) -> "SendResult":
         ...
+
+
+@dataclass(frozen=True)
+class SendResult:
+    message_id: str | None = None
+    root_id: str | None = None
+    thread_id: str | None = None

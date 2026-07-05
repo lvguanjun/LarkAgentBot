@@ -1,12 +1,21 @@
 from pathlib import Path
 from typing import Any
 
-from lark_agent.app import BotApp
+import pytest
+
+from lark_agent.app import BotApp, MissingThreadIdError
 from lark_agent.config import AppConfig, ConversationConfig, LLMConfig, LarkConfig
 from lark_agent.conversation import Conversation
 from lark_agent.llm_client import LLMClient
 from lark_agent.mcp import MCPConfig, MCPServerConfig
-from lark_agent.transport.base import EmojiPart, ImagePart, IncomingMessage, MentionPart, TextPart
+from lark_agent.transport.base import (
+    EmojiPart,
+    ImagePart,
+    IncomingMessage,
+    MentionPart,
+    SendResult,
+    TextPart,
+)
 
 
 class FakeLLM:
@@ -36,7 +45,8 @@ class FakeToolLLM:
 
 
 class FakeSender:
-    def __init__(self) -> None:
+    def __init__(self, *, thread_id: str | None = "omt-new") -> None:
+        self.thread_id = thread_id
         self.sent: list[dict] = []
 
     async def send_text(
@@ -46,15 +56,18 @@ class FakeSender:
         *,
         root_id: str | None = None,
         reply_to_message_id: str | None = None,
-    ) -> None:
+        reply_in_thread: bool = False,
+    ) -> SendResult:
         self.sent.append(
             {
                 "chat_id": chat_id,
                 "text": text,
                 "root_id": root_id,
                 "reply_to_message_id": reply_to_message_id,
+                "reply_in_thread": reply_in_thread,
             }
         )
+        return SendResult(message_id="sent-1", root_id=root_id, thread_id=self.thread_id)
 
 
 class FakeMCPManager:
@@ -134,6 +147,7 @@ async def test_app_handles_text_message_end_to_end(tmp_path: Path) -> None:
         chat_type="group",
         sender_id="user-1",
         root_id="root-1",
+        thread_id="omt-1",
         mentions=["bot-1"],
         content=[TextPart("hello")],
     )
@@ -147,16 +161,109 @@ async def test_app_handles_text_message_end_to_end(tmp_path: Path) -> None:
             "text": "assistant reply",
             "root_id": "root-1",
             "reply_to_message_id": "msg-1",
+            "reply_in_thread": True,
         }
     ]
     assert fake_llm.calls == [
         ("system prompt", [{"role": "user", "content": "hello"}]),
     ]
-    history_path = tmp_path / "groups" / "chat-1" / "conversations" / "root-1" / "history.jsonl"
+    history_path = tmp_path / "groups" / "chat-1" / "conversations" / "omt-1" / "history.jsonl"
     assert history_path.read_text(encoding="utf-8").splitlines() == [
         '{"role": "user", "content": "hello"}',
         '{"role": "assistant", "content": "assistant reply"}',
     ]
+
+
+async def test_group_message_without_thread_persists_under_created_topic(tmp_path: Path) -> None:
+    fake_llm = FakeLLM("assistant reply")
+    sender = FakeSender(thread_id="omt-created")
+    app = BotApp(
+        make_config(tmp_path),
+        sender=sender,
+        llm_client=LLMClient(LLMConfig(model="fake"), client=fake_llm),
+    )
+    message = IncomingMessage(
+        message_id="msg-1",
+        chat_id="chat-1",
+        chat_type="group",
+        sender_id="user-1",
+        mentions=["bot-1"],
+        content=[TextPart("hello")],
+    )
+
+    reply = await app.handle_message(message)
+
+    assert reply == "assistant reply"
+    assert sender.sent == [
+        {
+            "chat_id": "chat-1",
+            "text": "assistant reply",
+            "root_id": None,
+            "reply_to_message_id": "msg-1",
+            "reply_in_thread": True,
+        }
+    ]
+    history_path = tmp_path / "groups" / "chat-1" / "conversations" / "omt-created" / "history.jsonl"
+    assert history_path.read_text(encoding="utf-8").splitlines() == [
+        '{"role": "user", "content": "hello"}',
+        '{"role": "assistant", "content": "assistant reply"}',
+    ]
+    assert not (tmp_path / "groups" / "chat-1" / "conversations" / "main").exists()
+    assert not (tmp_path / "groups" / "chat-1" / "conversations" / "msg-1").exists()
+
+
+async def test_p2p_message_without_thread_uses_sender_project_and_created_topic(
+    tmp_path: Path,
+) -> None:
+    fake_llm = FakeLLM("assistant reply")
+    sender = FakeSender(thread_id="omt-p2p")
+    app = BotApp(
+        make_config(tmp_path),
+        sender=sender,
+        llm_client=LLMClient(LLMConfig(model="fake"), client=fake_llm),
+    )
+    message = IncomingMessage(
+        message_id="msg-1",
+        chat_id="chat-p2p",
+        chat_type="p2p",
+        sender_id="sender-open",
+        content=[TextPart("hello")],
+    )
+
+    await app.handle_message(message)
+
+    assert sender.sent[0]["reply_in_thread"] is True
+    history_path = tmp_path / "groups" / "sender-open" / "conversations" / "omt-p2p" / "history.jsonl"
+    assert history_path.read_text(encoding="utf-8").splitlines() == [
+        '{"role": "user", "content": "hello"}',
+        '{"role": "assistant", "content": "assistant reply"}',
+    ]
+    assert not (tmp_path / "groups" / "chat-p2p").exists()
+    assert not (tmp_path / "groups" / "sender-open" / "conversations" / "chat-p2p").exists()
+
+
+async def test_new_topic_missing_thread_id_fails_closed_without_history(tmp_path: Path) -> None:
+    fake_llm = FakeLLM("assistant reply")
+    sender = FakeSender(thread_id=None)
+    app = BotApp(
+        make_config(tmp_path),
+        sender=sender,
+        llm_client=LLMClient(LLMConfig(model="fake"), client=fake_llm),
+    )
+    message = IncomingMessage(
+        message_id="msg-1",
+        chat_id="chat-1",
+        chat_type="group",
+        sender_id="user-1",
+        mentions=["bot-1"],
+        content=[TextPart("hello")],
+    )
+
+    with pytest.raises(MissingThreadIdError, match="did not return thread_id"):
+        await app.handle_message(message)
+
+    assert sender.sent[0]["reply_in_thread"] is True
+    assert not (tmp_path / "groups" / "chat-1" / "conversations").exists()
 
 
 async def test_app_ignores_unmentioned_group_message(tmp_path: Path) -> None:
@@ -207,10 +314,11 @@ async def test_app_handles_help_command_without_llm_or_history(tmp_path: Path) -
             "text": reply,
             "root_id": None,
             "reply_to_message_id": "msg-1",
+            "reply_in_thread": False,
         }
     ]
     assert fake_llm.calls == []
-    history_path = tmp_path / "groups" / "chat-1" / "conversations" / "chat-1" / "history.jsonl"
+    history_path = tmp_path / "groups" / "user-1" / "conversations" / "unthreaded" / "history.jsonl"
     assert not history_path.exists()
 
 
@@ -429,8 +537,8 @@ mcpServers:
 
 
 async def test_reset_command_clears_only_current_conversation(tmp_path: Path) -> None:
-    current = Conversation(tmp_path / "groups" / "chat-1" / "conversations" / "chat-1")
-    other = Conversation(tmp_path / "groups" / "chat-1" / "conversations" / "root-2")
+    current = Conversation(tmp_path / "groups" / "user-1" / "conversations" / "omt-reset")
+    other = Conversation(tmp_path / "groups" / "user-1" / "conversations" / "root-2")
     current.append({"role": "user", "content": "current"})
     other.append({"role": "user", "content": "other"})
     sender = FakeSender()
@@ -445,12 +553,13 @@ async def test_reset_command_clears_only_current_conversation(tmp_path: Path) ->
         chat_id="chat-1",
         chat_type="p2p",
         sender_id="user-1",
+        thread_id="omt-reset",
         content=[TextPart("/reset")],
     )
 
     reply = await app.handle_message(message)
 
-    assert reply == "Conversation reset for thread: chat-1"
+    assert reply == "Conversation reset for thread: omt-reset"
     assert current.get_full_history() == []
     assert other.get_full_history() == [{"role": "user", "content": "other"}]
     assert fake_llm.calls == []
@@ -579,7 +688,7 @@ async def test_app_runs_read_skill_tool_loop_and_persists_full_chain(tmp_path: P
     assert len(fake_llm.calls) == 2
     assert fake_llm.calls[1][1][-1]["role"] == "tool"
     assert "Use short sentences." in fake_llm.calls[1][1][-1]["content"]
-    history_path = tmp_path / "groups" / "chat-1" / "conversations" / "chat-1" / "history.jsonl"
+    history_path = tmp_path / "groups" / "user-1" / "conversations" / "omt-new" / "history.jsonl"
     assert history_path.read_text(encoding="utf-8").splitlines() == [
         '{"role": "user", "content": "use the writer skill"}',
         (
@@ -665,7 +774,7 @@ mcpServers:
             },
         }
     ]
-    history_path = tmp_path / "groups" / "chat-1" / "conversations" / "chat-1" / "history.jsonl"
+    history_path = tmp_path / "groups" / "user-1" / "conversations" / "omt-new" / "history.jsonl"
     assert history_path.read_text(encoding="utf-8").splitlines() == [
         '{"role": "user", "content": "use mcp"}',
         (

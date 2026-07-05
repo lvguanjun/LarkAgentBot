@@ -73,7 +73,9 @@ module and make consumers call that owner instead of re-parsing raw payloads.
 
 ## Runtime Path Contracts
 
-- Runtime group data lives under `data/groups/<chat_id>/`.
+- Runtime project data lives under `data/groups/<project_key>/`. For group
+  chats, `project_key` is `IncomingMessage.chat_id`; for p2p chats,
+  `project_key` is `IncomingMessage.sender_id`.
 - Default project resources live under `data/defaults/`.
 - The runtime `data/` directory is local state and must stay ignored by Git.
   Do not commit real group conversations, local defaults, group config, or MCP
@@ -87,7 +89,9 @@ module and make consumers call that owner instead of re-parsing raw payloads.
   `data/groups/<chat_id>/.agents/mcp.yaml`.
 - `AGENTS.md` stays at the default or group root.
 - Conversation history must use
-  `data/groups/<chat_id>/conversations/<thread_id>/history.jsonl`.
+  `data/groups/<project_key>/conversations/<thread_id>/history.jsonl`, where
+  `<thread_id>` is a real Feishu/Lark `thread_id`, not `root_id`, `message_id`,
+  p2p `chat_id`, or `main`.
 
 ---
 
@@ -132,6 +136,11 @@ empty data directories, and runner startup without a configured bot ID.
   handed to `BotApp`.
 - Replies use the Feishu/Lark reply API when `reply_to_message_id` is present;
   otherwise create a new message in `chat_id`.
+- Ordinary LLM replies that have a `reply_to_message_id` must pass
+  `reply_in_thread=True`; the sender must not infer this flag from `root_id`.
+- Feishu/Lark event adapters must preserve `message.thread_id` on
+  `IncomingMessage.thread_id`, and senders must return SDK-independent
+  `SendResult(message_id, root_id, thread_id)` values from API responses.
 - SDK callbacks must acknowledge quickly and schedule `BotApp.handle_message`
   as background work. Do not block callbacks on LLM or tool execution.
 - Background `BotApp.handle_message` failures are logged in task callbacks and
@@ -235,6 +244,94 @@ Tests that modify live transport must cover pure event conversion, sender
 request fields, ack-first scheduling, TTL dedupe, missing-key skip, background
 error logging, event-handler registration, config validation, and bot identity
 injection with fake Lark clients.
+
+### Scenario: Feishu/Lark Topic Conversation Persistence
+
+#### 1. Scope / Trigger
+
+- Trigger: ordinary LLM replies in group or p2p chats need Feishu topic
+  semantics and local conversation history must follow the same topic ID.
+- Scope: `transport/base.py`, `transport/lark/`, `router.py`, `app.py`,
+  `project.py`, and tests. Management commands remain outside ordinary LLM
+  conversation history.
+
+#### 2. Signatures
+
+- `IncomingMessage.thread_id: str | None`
+- `MessageRouter.get_existing_thread_id(message: IncomingMessage) -> str | None`
+- `MessageSender.send_text(..., reply_in_thread: bool = False) -> SendResult`
+- `SendResult(message_id: str | None, root_id: str | None, thread_id: str | None)`
+
+#### 3. Contracts
+
+- `thread_id` is the only trusted ordinary conversation id.
+- `root_id` and `message_id` are transport/send targeting fields; they must not
+  be used as conversation directory names.
+- p2p and group chats share the same topic creation and persistence path.
+- Project key selection is the only allowed chat-type split for ordinary
+  persistence: group uses `chat_id`; p2p uses `sender_id`.
+- New ordinary replies to messages without an existing `thread_id` must use the
+  reply API with `reply_in_thread=True`, then persist the buffered turn under
+  `SendResult.thread_id`.
+- Existing-topic messages use `IncomingMessage.thread_id` for context lookup and
+  persistence, then reply with `reply_in_thread=True`.
+
+#### 4. Validation & Error Matrix
+
+- Unsupported or missing event `thread_id` on an otherwise valid new ordinary
+  message -> run with empty context until send result is known.
+- Send succeeds but `SendResult.thread_id` is missing for a new ordinary topic
+  -> raise a clear error and do not write ordinary conversation history.
+- Existing-topic send result lacks `thread_id` -> continue to persist under the
+  already-known `IncomingMessage.thread_id`.
+- Group message in an activated topic without mention -> respond only when the
+  event has the real activated `thread_id`.
+
+#### 5. Good/Base/Bad Cases
+
+- Good: group mention with no `thread_id` replies with `reply_in_thread=True`
+  and writes to `data/groups/<chat_id>/conversations/<returned-thread>/`.
+- Good: p2p message with no `thread_id` writes to
+  `data/groups/<sender_id>/conversations/<returned-thread>/`.
+- Base: management command without `thread_id` may use a diagnostic command
+  thread label, but must not append ordinary LLM history.
+- Bad: writing new ordinary history to `conversations/main`,
+  `conversations/<root_id>`, `conversations/<message_id>`, or p2p
+  `conversations/<chat_id>`.
+
+#### 6. Tests Required
+
+- Adapter test asserting Feishu event `thread_id` reaches `IncomingMessage`.
+- Sender tests asserting explicit `reply_in_thread` request fields and
+  `SendResult` extraction.
+- Router tests asserting only `thread_id` resolves existing ordinary topics and
+  activated-thread matching ignores `root_id`.
+- App tests asserting group and p2p first turns persist under returned
+  `thread_id`, p2p project paths use `sender_id`, existing-topic turns persist
+  under existing `thread_id`, and missing send-result `thread_id` fails closed.
+
+#### 7. Wrong vs Correct
+
+Wrong:
+
+```python
+thread_id = message.root_id or message.chat_id or "main"
+conversation = project.get_conversation(thread_id)
+conversation.append({"role": "user", "content": user_text})
+```
+
+Correct:
+
+```python
+existing_thread_id = router.get_existing_thread_id(message)
+turn_messages = [{"role": "user", "content": user_text}]
+send_result = await sender.send_text(..., reply_in_thread=True)
+final_thread_id = existing_thread_id or send_result.thread_id
+if final_thread_id is None:
+    raise MissingThreadIdError("Feishu reply did not return thread_id")
+for turn_message in turn_messages:
+    project.get_conversation(final_thread_id).append(turn_message)
+```
 
 ---
 

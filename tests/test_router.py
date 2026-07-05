@@ -1,4 +1,4 @@
-from lark_agent.router import MAIN_THREAD_ID, MessageRouter
+from lark_agent.router import MessageRouter
 from lark_agent.transport.base import ChatType, ImagePart, IncomingMessage, MentionPart, TextPart
 
 
@@ -7,6 +7,7 @@ def make_message(
     chat_type: ChatType = "group",
     mentions: list[str] | None = None,
     root_id: str | None = None,
+    thread_id: str | None = None,
     text: str = "hello",
 ) -> IncomingMessage:
     return IncomingMessage(
@@ -15,6 +16,7 @@ def make_message(
         chat_type=chat_type,
         sender_id="user-1",
         root_id=root_id,
+        thread_id=thread_id,
         mentions=mentions or [],
         content=[TextPart(text)],
     )
@@ -35,18 +37,19 @@ def test_private_chat_always_responds() -> None:
 
 def test_activated_thread_auto_responds_without_mention() -> None:
     router = MessageRouter("bot-1")
-    router.mark_thread_activated("chat-1", "root-1")
+    router.mark_thread_activated("chat-1", "omt-1")
 
-    assert router.should_respond(make_message(root_id="root-1")) is True
-    assert router.should_respond(make_message(root_id="root-2")) is False
+    assert router.should_respond(make_message(root_id="root-1", thread_id="omt-1")) is True
+    assert router.should_respond(make_message(root_id="root-1")) is False
+    assert router.should_respond(make_message(root_id="root-2", thread_id="omt-2")) is False
 
 
 def test_thread_id_resolution() -> None:
     router = MessageRouter("bot-1")
 
-    assert router.get_thread_id(make_message(chat_type="p2p")) == "chat-1"
-    assert router.get_thread_id(make_message(root_id="root-1")) == "root-1"
-    assert router.get_thread_id(make_message()) == MAIN_THREAD_ID
+    assert router.get_existing_thread_id(make_message(thread_id="omt-1")) == "omt-1"
+    assert router.get_existing_thread_id(make_message(chat_type="p2p")) is None
+    assert router.get_existing_thread_id(make_message(root_id="root-1")) is None
 
 
 def test_command_detection_respects_chat_type_rules() -> None:

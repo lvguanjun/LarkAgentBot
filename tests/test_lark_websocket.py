@@ -50,10 +50,18 @@ class FakeMessageApi:
 
 
 class FakeResponse:
-    def __init__(self, *, ok: bool = True, code: int = 0, msg: str = "ok") -> None:
+    def __init__(
+        self,
+        *,
+        ok: bool = True,
+        code: int = 0,
+        msg: str = "ok",
+        data: Any | None = None,
+    ) -> None:
         self.ok = ok
         self.code = code
         self.msg = msg
+        self.data = data
 
     def success(self) -> bool:
         return self.ok
@@ -102,6 +110,7 @@ def make_event(
     message_type: str = "text",
     content: dict[str, Any] | str | None = None,
     root_id: str | None = "root-1",
+    thread_id: str | None = "omt-1",
 ) -> Any:
     if content is None:
         content = {"text": "hello"}
@@ -114,6 +123,7 @@ def make_event(
         message_type=message_type,
         content=content_value,
         root_id=root_id,
+        thread_id=thread_id,
         mentions=[
             SimpleNamespace(
                 id=SimpleNamespace(open_id="bot-open", user_id="bot-user", union_id="bot-union")
@@ -154,6 +164,7 @@ def test_adapter_converts_text_message() -> None:
     assert message.chat_type == "group"
     assert message.sender_id == "sender-open"
     assert message.root_id == "root-1"
+    assert message.thread_id == "omt-1"
     assert message.mentions == ["bot-open", "bot-user", "bot-union"]
     assert message.content == [TextPart("hello")]
     assert message.raw_event is event
@@ -490,10 +501,17 @@ def test_adapter_dedupe_key_prefers_event_id_then_message_id() -> None:
 
 
 async def test_sender_replies_in_thread_when_reply_target_exists() -> None:
-    message_api = FakeMessageApi()
+    response_data = SimpleNamespace(message_id="reply-1", root_id="root-1", thread_id="omt-1")
+    message_api = FakeMessageApi(response=FakeResponse(data=response_data))
     sender = LarkMessageSender(FakeLarkClient(message_api))
 
-    await sender.send_text("chat-1", "你好", root_id="root-1", reply_to_message_id="msg-1")
+    result = await sender.send_text(
+        "chat-1",
+        "你好",
+        root_id="root-1",
+        reply_to_message_id="msg-1",
+        reply_in_thread=True,
+    )
 
     assert message_api.creates == []
     request = message_api.replies[0]
@@ -501,6 +519,19 @@ async def test_sender_replies_in_thread_when_reply_target_exists() -> None:
     assert request.body.msg_type == "text"
     assert request.body.reply_in_thread is True
     assert json.loads(request.body.content) == {"text": "你好"}
+    assert result.message_id == "reply-1"
+    assert result.root_id == "root-1"
+    assert result.thread_id == "omt-1"
+
+
+async def test_sender_uses_explicit_reply_in_thread_flag() -> None:
+    message_api = FakeMessageApi()
+    sender = LarkMessageSender(FakeLarkClient(message_api))
+
+    await sender.send_text("chat-1", "hello", root_id="root-1", reply_to_message_id="msg-1")
+
+    request = message_api.replies[0]
+    assert request.body.reply_in_thread is False
 
 
 async def test_sender_creates_message_without_reply_target() -> None:

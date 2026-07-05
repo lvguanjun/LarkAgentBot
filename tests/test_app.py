@@ -4,7 +4,7 @@ from typing import Any
 from lark_agent.app import BotApp
 from lark_agent.config import AppConfig, ConversationConfig, LLMConfig, LarkConfig
 from lark_agent.llm_client import LLMClient
-from lark_agent.mcp_manager import MCPConfig, MCPServerConfig
+from lark_agent.mcp import MCPConfig, MCPServerConfig
 from lark_agent.transport.base import ImagePart, IncomingMessage, TextPart
 
 

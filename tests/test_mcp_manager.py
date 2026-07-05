@@ -6,7 +6,7 @@ from typing import Any, AsyncIterator
 
 import pytest
 
-from lark_agent.mcp_manager import (
+from lark_agent.mcp import (
     MCPConfig,
     MCPManager,
     MCPServerConfig,

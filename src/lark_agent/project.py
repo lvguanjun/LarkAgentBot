@@ -4,7 +4,7 @@ from pathlib import Path
 
 from lark_agent.agents_conf import AgentsConf
 from lark_agent.conversation import Conversation
-from lark_agent.mcp_manager import MCPConfig, load_mcp_config
+from lark_agent.mcp import MCPConfig, load_mcp_config
 from lark_agent.skills import SkillsRegistry
 
 

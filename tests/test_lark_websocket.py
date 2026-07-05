@@ -10,7 +10,7 @@ import pytest
 from lark_agent.config import AppConfig, ConversationConfig, LLMConfig, LarkConfig
 from lark_agent.main import validate_lark_config
 from lark_agent.transport.base import ImagePart, TextPart
-from lark_agent.transport.websocket import (
+from lark_agent.transport.lark import (
     LarkMessageEventAdapter,
     LarkMessageSender,
     LarkSendError,

@@ -8,7 +8,7 @@ import lark_oapi as lark
 from lark_agent.app import BotApp
 from lark_agent.config import AppConfig, load_config
 from lark_agent.llm_client import LLMClient
-from lark_agent.transport.websocket import LarkMessageSender, LarkWebSocketBotRunner
+from lark_agent.transport.lark import LarkMessageSender, LarkWebSocketBotRunner
 
 
 def validate_lark_config(config: AppConfig) -> None:

@@ -22,10 +22,12 @@ src/
     ├── agents_conf.py      # AGENTS.md fallback loading
     ├── conversation.py     # JSONL history persistence and context windowing
     ├── llm_client.py       # OpenAI-compatible client wrapper
+    ├── mcp/                # MCP config, naming, session, manager, results
     ├── project.py          # chat_id -> Project and conversation paths
     ├── router.py           # Trigger rules and thread activation state
     └── transport/
-        └── base.py         # Internal transport boundary dataclasses/protocols
+        ├── base.py         # Internal transport boundary dataclasses/protocols
+        └── lark/           # Feishu/Lark SDK adapter, sender, runner, dedupe
 ```
 
 ---
@@ -33,8 +35,11 @@ src/
 ## Module Organization
 
 - Keep external SDK-specific code in adapter modules, not in core logic. For
-  example, future `lark-oapi` WebSocket code belongs under `transport/`, while
+  example, `lark-oapi` WebSocket code belongs under `transport/lark/`, while
   tests should exercise `IncomingMessage` from `transport/base.py`.
+- Keep MCP protocol/client details under `mcp/`. Core modules import the public
+  package boundary (`from lark_agent.mcp import ...`) instead of reaching into
+  implementation files unless they truly need an internal helper.
 - Put one cross-layer contract owner next to the data it owns:
   `conversation.py` owns history JSONL message grouping, `project.py` owns
   filesystem path layout, and `config.py` owns YAML decoding.
@@ -69,6 +74,10 @@ src/
 ## Examples
 
 - `src/lark_agent/transport/base.py`: stable boundary types without SDK imports.
+- `src/lark_agent/transport/lark/`: Feishu/Lark SDK-specific event adapters,
+  senders, runners, and dedupe cache.
+- `src/lark_agent/mcp/`: MCP config loading, tool naming, session factory,
+  manager lifecycle, and tool result formatting.
 - `src/lark_agent/conversation.py`: JSONL persistence and windowing owned in one
   module instead of repeated parsing in consumers.
 
@@ -78,7 +87,7 @@ src/
 
 - Trigger: live Feishu/Lark WebSocket integration adds an external SDK boundary
   and converts SDK event payloads into the internal transport contract.
-- SDK-specific imports stay in `src/lark_agent/transport/websocket.py` and
+- SDK-specific imports stay in `src/lark_agent/transport/lark/` and
   `src/lark_agent/main.py`; core modules keep depending only on
   `IncomingMessage` and `MessageSender`.
 

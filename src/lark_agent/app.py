@@ -5,7 +5,7 @@ from typing import Any
 
 from lark_agent.config import AppConfig
 from lark_agent.llm_client import LLMClient
-from lark_agent.mcp_manager import MCPConfig, MCPManager
+from lark_agent.mcp import MCPConfig, MCPManager
 from lark_agent.project import ProjectStore
 from lark_agent.router import MessageRouter
 from lark_agent.tools import BuiltinTools, ToolDispatcher

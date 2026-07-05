@@ -71,3 +71,90 @@ src/
 - `src/lark_agent/transport/base.py`: stable boundary types without SDK imports.
 - `src/lark_agent/conversation.py`: JSONL persistence and windowing owned in one
   module instead of repeated parsing in consumers.
+
+## Scenario: Feishu WebSocket Transport Adapter
+
+### 1. Scope / Trigger
+
+- Trigger: live Feishu/Lark WebSocket integration adds an external SDK boundary
+  and converts SDK event payloads into the internal transport contract.
+- SDK-specific imports stay in `src/lark_agent/transport/websocket.py` and
+  `src/lark_agent/main.py`; core modules keep depending only on
+  `IncomingMessage` and `MessageSender`.
+
+### 2. Signatures
+
+- `LarkMessageEventAdapter.to_incoming_message(event) -> IncomingMessage | None`
+- `LarkMessageEventAdapter.dedupe_key(event) -> str | None`
+- `LarkMessageSender.send_text(chat_id, text, *, root_id=None, reply_to_message_id=None) -> None`
+- `LarkWebSocketBotRunner.handle_event(event) -> None`
+- `python -m lark_agent.main --config config.yaml`
+
+### 3. Contracts
+
+- Feishu text/post/image events are normalized to `IncomingMessage.content`
+  with `TextPart` and `ImagePart`; unsupported message types return `None`.
+- Feishu `chat_type` maps only to internal `"group"` or `"p2p"`; unknown chat
+  types return `None`.
+- Dedupe keys prefer event header `event_id`, then event `uuid`, then
+  `message.message_id`. Events without a stable key are acknowledged but not
+  handed to `BotApp`.
+- Replies use Feishu reply API when `reply_to_message_id` is present; otherwise
+  create API sends to `chat_id`.
+
+### 4. Validation & Error Matrix
+
+- Missing `lark.app_id`, `lark.app_secret`, or `lark.bot_id` at startup ->
+  raise `ValueError` before opening WebSocket.
+- Invalid message JSON -> log and return `None`.
+- Unsupported message/chat type -> return `None`.
+- Duplicate dedupe key in TTL window -> return without scheduling a task.
+- Feishu send API failure -> raise `LarkSendError` from the sender.
+- Background `BotApp.handle_message` failure -> log in task callback; do not
+  propagate to the SDK event callback.
+
+### 5. Good/Base/Bad Cases
+
+- Good: `p2.im.message.receive_v1` text event with stable `event_id` schedules
+  one background `BotApp.handle_message` call and returns quickly.
+- Base: image event becomes `ImagePart(file_key=...)` without downloading the
+  image.
+- Bad: event without `event_id`, `uuid`, or `message_id` is skipped to avoid
+  non-idempotent LLM replies.
+
+### 6. Tests Required
+
+- Pure conversion tests for text, post, image, unsupported type, and unknown
+  chat type.
+- Sender tests with fake message API asserting reply/create request fields.
+- Runner tests asserting ack-first scheduling, TTL dedupe, missing-key skip,
+  background error logging, and event-handler registration.
+- Main-entry tests should cover config validation only; never start a real
+  WebSocket in unit tests.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+def on_message(event):
+    message = adapter.to_incoming_message(event)
+    asyncio.run(app.handle_message(message))
+```
+
+This blocks the SDK callback on LLM/tool work and risks Feishu retrying the
+event.
+
+#### Correct
+
+```python
+def on_message(event):
+    key = adapter.dedupe_key(event)
+    if key is None or cache.seen_or_mark(key):
+        return
+    message = adapter.to_incoming_message(event)
+    if message is None:
+        return
+    task = asyncio.get_running_loop().create_task(app.handle_message(message))
+    task.add_done_callback(log_background_failure)
+```

@@ -108,3 +108,36 @@ Implemented the lark-agent-bot Skills slice: Skills discovery with default/group
 ### Next Steps
 
 - None - task complete
+
+
+## Session 3: MCP tools integration
+
+**Date**: 2026-07-05
+**Task**: MCP tools integration
+**Branch**: `master`
+
+### Summary
+
+Implemented the lark-agent MCP child task: .agents/mcp.yaml defaults/group merge with enabled=false overrides, official MCP SDK stdio manager with injectable sessions, mcp__server__tool naming and schema conversion, unified built-in/MCP tool dispatch, BotApp lifecycle integration, JSONL tool-result persistence, and 37 passing tests.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d57ba83` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

@@ -416,3 +416,36 @@ Implemented automatic Lark bot identity resolution: bot info API helper and diag
 ### Next Steps
 
 - None - task complete
+
+
+## Session 12: Feishu image message support
+
+**Date**: 2026-07-05
+**Task**: Feishu image message support
+**Branch**: `master`
+
+### Summary
+
+Implemented Feishu image message support: authenticated image downloads, local binary attachment storage with JSONL image_ref history, OpenAI data URL expansion for current and follow-up context, command-path no-download behavior, TODO/spec updates, and unit coverage for app and Lark downloader paths.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7afd329` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

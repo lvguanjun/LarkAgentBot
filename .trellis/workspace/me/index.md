@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 11
+- **Total Sessions**: 12
 - **Last Active**: 2026-07-05
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~414 | Active |
+| `journal-1.md` | ~451 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 12 | 2026-07-05 | Feishu image message support | `7afd329` | `master` |
 | 11 | 2026-07-05 | 修复飞书话题持久化 | `991d30e` | `master` |
 | 10 | 2026-07-05 | 飞书消息内容归一化 | `3b5070b` | `master` |
 | 9 | 2026-07-05 | Auto fetch Lark bot identity | `ab4296b` | `master` |

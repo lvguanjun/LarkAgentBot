@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from types import SimpleNamespace
 from typing import Any
 
@@ -69,6 +70,17 @@ class FakeBotApp:
         return "ok"
 
 
+IGNORED_LARK_EVENT_TYPES = (
+    "im.chat.member.bot.added_v1",
+    "im.chat.member.bot.deleted_v1",
+    "im.message.reaction.created_v1",
+    "im.message.reaction.deleted_v1",
+    "drive.notice.comment_add_v1",
+    "vc.meeting.participant_meeting_ended_v1",
+    "minutes.minute.generated_v1",
+)
+
+
 def make_event(
     *,
     event_id: str | None = "event-1",
@@ -100,6 +112,21 @@ def make_event(
         header=header,
         uuid=None,
         event=SimpleNamespace(sender=sender, message=message),
+    )
+
+
+def make_ignored_event(event_type: str = "im.chat.member.bot.added_v1") -> Any:
+    return SimpleNamespace(
+        header=SimpleNamespace(
+            event_type=event_type,
+            event_id="event-ignored",
+        ),
+        event=SimpleNamespace(
+            chat_id="chat-1",
+            operator_id=SimpleNamespace(open_id="operator-open"),
+            name="agent",
+            external=False,
+        ),
     )
 
 
@@ -271,6 +298,68 @@ def test_runner_builds_registered_feishu_event_handler() -> None:
     handler = runner.build_event_handler()
 
     assert "p2.im.message.receive_v1" in handler._processorMap
+    for event_type in IGNORED_LARK_EVENT_TYPES:
+        assert f"p2.{event_type}" in handler._processorMap
+
+
+@pytest.mark.parametrize("event_type", IGNORED_LARK_EVENT_TYPES)
+def test_runner_dispatches_ignored_event_through_lark_handler(
+    event_type: str,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    app = FakeBotApp()
+    runner = LarkWebSocketBotRunner(
+        app_id="app",
+        app_secret="secret",
+        app=app,  # type: ignore[arg-type]
+    )
+    handler = runner.build_event_handler()
+    payload = {
+        "schema": "2.0",
+        "header": {
+            "event_id": "event-ignored",
+            "event_type": event_type,
+            "create_time": "1783255282055",
+            "token": "",
+            "app_id": "app",
+            "tenant_key": "tenant",
+        },
+        "event": {
+            "chat_id": "chat-1",
+            "operator_id": {"open_id": "operator-open"},
+            "external": False,
+            "name": "agent",
+        },
+    }
+
+    with caplog.at_level(logging.INFO, logger="lark_agent.transport.lark.runner"):
+        handler._do_without_validation(json.dumps(payload).encode())
+
+    assert app.messages == []
+    assert "Ignoring Feishu event without business handler" in caplog.text
+
+
+async def test_runner_logs_ignored_event_without_scheduling_message(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    app = FakeBotApp()
+    runner = LarkWebSocketBotRunner(
+        app_id="app",
+        app_secret="secret",
+        app=app,  # type: ignore[arg-type]
+    )
+
+    with caplog.at_level(logging.INFO, logger="lark_agent.transport.lark.runner"):
+        runner.handle_ignored_event(make_ignored_event())
+
+    await asyncio.sleep(0)
+
+    assert app.messages == []
+    assert "Ignoring Feishu event without business handler" in caplog.text
+    assert "event_type=im.chat.member.bot.added_v1" in caplog.text
+    assert "event_id=event-ignored" in caplog.text
+    assert "chat_id=chat-1" in caplog.text
+    assert "operator_id=operator-open" in caplog.text
 
 
 def test_validate_lark_config_fails_fast_for_missing_credentials(tmp_path) -> None:

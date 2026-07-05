@@ -247,3 +247,36 @@ Implemented the Feishu WebSocket transport slice: event conversion for text/post
 ### Next Steps
 
 - None - task complete
+
+
+## Session 7: Management commands
+
+**Date**: 2026-07-05
+**Task**: Management commands
+**Branch**: `master`
+
+### Summary
+
+Implemented low-risk Lark Agent management commands: /help, /config, /skill list, /mcp list, and /reset. Commands bypass the LLM, avoid normal history writes, redact sensitive config and MCP env values, reset only the current conversation, update README/TODO, and add app-level coverage for routing, redaction, skills, MCP summaries, reset, and unknown commands.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `38529c7` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

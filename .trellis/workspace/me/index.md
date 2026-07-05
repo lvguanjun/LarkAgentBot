@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 6
+- **Total Sessions**: 7
 - **Last Active**: 2026-07-05
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~249 | Active |
+| `journal-1.md` | ~282 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 7 | 2026-07-05 | Management commands | `38529c7` | `master` |
 | 6 | 2026-07-05 | Feishu websocket transport | `34e4492`, `e9c5bf0` | `master` |
 | 5 | 2026-07-05 | Runtime data Git hygiene | `bc9fe71` | `master` |
 | 4 | 2026-07-05 | Update Python 3.13 dependency baseline | `7b02ef8` | `master` |

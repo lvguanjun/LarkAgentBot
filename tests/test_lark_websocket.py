@@ -545,7 +545,7 @@ async def test_runner_schedules_background_task_and_dedupes() -> None:
     await asyncio.sleep(0)
 
 
-async def test_runner_logs_bounded_raw_and_normalized_content(
+async def test_runner_logs_bounded_raw_content(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     app = FakeBotApp()
@@ -565,10 +565,6 @@ async def test_runner_logs_bounded_raw_and_normalized_content(
 
     assert "Received Feishu message event:" in caplog.text
     assert "content_preview=" in caplog.text
-    assert "Normalized Feishu message event:" in caplog.text
-    assert "raw_content_preview=" in caplog.text
-    assert "normalized_parts_preview=" in caplog.text
-    assert "text_projection_preview=" in caplog.text
     assert "[truncated " in caplog.text
     assert long_text not in caplog.text
 

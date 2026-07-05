@@ -136,9 +136,8 @@ empty data directories, and runner startup without a configured bot ID.
   as background work. Do not block callbacks on LLM or tool execution.
 - Background `BotApp.handle_message` failures are logged in task callbacks and
   must not propagate into the SDK event callback.
-- Runner event logs that include Feishu `message.content` or normalized message
-  projections must use bounded previews. Do not log raw content, normalized
-  part JSON, or text projections without a hard length cap.
+- Runner event logs that include Feishu `message.content` must use bounded
+  previews. Do not log raw message content without a hard length cap.
 
 ### Scenario: Feishu/Lark Leading Bot Mention Normalization
 
@@ -173,11 +172,7 @@ empty data directories, and runner startup without a configured bot ID.
 - Default `IncomingMessage.text_content()` projection is owned by
   `transport/base.py`; router code may strip leading bot mentions but must not
   reimplement per-message-type Feishu semantics.
-- After adapter normalization succeeds, runner logs one `INFO` comparison entry
-  with `message_id`, `chat_id`, `message_type`, bounded `raw_content_preview`,
-  bounded `normalized_parts_preview`, and bounded `text_projection_preview`.
-  The pre-normalization "received event" log must also use a bounded
-  `content_preview`.
+- The runner's "received event" log must use a bounded `content_preview`.
 
 #### 4. Validation & Error Matrix
 
@@ -186,9 +181,9 @@ empty data directories, and runner startup without a configured bot ID.
 - Known attachment/business message with no downloadable content -> adapter
   returns structured metadata or `SummaryPart` instead of pretending content
   was read.
-- Long raw content, normalized parts, or projections -> log only the configured
-  preview prefix and append a truncation marker. This protects logs if future
-  Feishu payloads include base64, very large card JSON, or long text.
+- Long raw content -> log only the configured preview prefix and append a
+  truncation marker. This protects logs if future Feishu payloads include
+  base64, very large card JSON, or long text.
 - Group message without a bot mention -> router must not strip leading mention
   placeholders and must not treat `/command` as actionable.
 
@@ -206,8 +201,7 @@ empty data directories, and runner startup without a configured bot ID.
   normalization from reliably removing the leading mention.
 - Bad: Returning `None` for known `audio`, `media`, `file`, calendar, vote, or
   location messages makes real conversations disappear at the adapter boundary.
-- Bad: Logging `message.content` directly can flood logs with large payloads and
-  makes normalized comparison logging unsafe to enable at `INFO`.
+- Bad: Logging `message.content` directly can flood logs with large payloads.
 
 #### 6. Tests Required
 
@@ -218,8 +212,8 @@ empty data directories, and runner startup without a configured bot ID.
   summary message types.
 - App tests must prove normalized group text, including image alt text, is what
   reaches the LLM history.
-- Runner tests must prove raw event content and normalized comparison logs are
-  emitted with bounded previews and truncation markers for oversized content.
+- Runner tests must prove raw event content logs are emitted with bounded
+  previews and truncation markers for oversized content.
 
 #### 7. Wrong vs Correct
 

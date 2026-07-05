@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 from collections.abc import Sequence
 
 import lark_oapi as lark
@@ -10,6 +11,20 @@ from lark_agent.config import AppConfig, LarkConfig, load_config
 from lark_agent.llm_client import LLMClient
 from lark_agent.transport.lark import LarkMessageSender, LarkWebSocketBotRunner
 from lark_agent.transport.lark.bot_info import fetch_lark_bot_info
+
+
+def configure_logging(level: int = logging.INFO) -> None:
+    logger = logging.getLogger("lark_agent")
+    logger.setLevel(level)
+    logger.propagate = False
+    if logger.handlers:
+        return
+
+    handler = logging.StreamHandler()
+    handler.setFormatter(
+        logging.Formatter("[%(name)s] [%(asctime)s] [%(levelname)s] %(message)s")
+    )
+    logger.addHandler(handler)
 
 
 def validate_lark_config(config: AppConfig) -> None:
@@ -60,6 +75,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Run the Lark Agent Feishu WebSocket bot.")
     parser.parse_args(argv)
 
+    configure_logging()
     config = load_config()
     build_runner(config).start()
 

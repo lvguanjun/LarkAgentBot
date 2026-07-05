@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 
 from lark_agent.config import AppConfig, ConversationConfig, LLMConfig, LarkConfig
-from lark_agent.main import build_runner, validate_lark_config
+from lark_agent.main import build_runner, configure_logging, validate_lark_config
 from lark_agent.transport.lark.bot_info import LarkBotInfo
 from lark_agent.transport.base import ImagePart, TextPart
 from lark_agent.transport.lark import (
@@ -433,3 +433,28 @@ def test_build_runner_fetches_bot_open_id_for_router(monkeypatch: pytest.MonkeyP
     assert requested_clients == [("app", "secret")]
     assert runner.app.config.lark.bot_id == "ou_from_api"
     assert runner.app.router.bot_id == "ou_from_api"
+
+
+def test_configure_logging_emits_package_info(capsys: pytest.CaptureFixture[str]) -> None:
+    package_logger = logging.getLogger("lark_agent")
+    old_handlers = list(package_logger.handlers)
+    old_level = package_logger.level
+    old_propagate = package_logger.propagate
+    for handler in old_handlers:
+        package_logger.removeHandler(handler)
+
+    try:
+        configure_logging()
+        logging.getLogger("lark_agent.transport.lark.runner").info("probe event log")
+
+        captured = capsys.readouterr()
+
+        assert "[lark_agent.transport.lark.runner]" in captured.err
+        assert "probe event log" in captured.err
+    finally:
+        for handler in list(package_logger.handlers):
+            package_logger.removeHandler(handler)
+        for handler in old_handlers:
+            package_logger.addHandler(handler)
+        package_logger.setLevel(old_level)
+        package_logger.propagate = old_propagate

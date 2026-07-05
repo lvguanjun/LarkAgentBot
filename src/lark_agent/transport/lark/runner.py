@@ -11,7 +11,6 @@ from lark_agent.app import BotApp
 from lark_agent.transport.lark.adapter import LarkMessageEventAdapter
 from lark_agent.transport.lark.dedupe import TTLSeenCache
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -128,6 +127,7 @@ def _format_event_log_fields(event: Any) -> str:
         "chat_id": _string_attr(message, "chat_id") or _string_attr(data, "chat_id"),
         "sender_id": _id_fields(getattr(getattr(data, "sender", None), "sender_id", None)),
         "operator_id": _id_fields(getattr(data, "operator_id", None)),
+        "content": _string_attr(message, "content"),
     }
     return " ".join(f"{name}={value}" for name, value in fields.items() if value)
 

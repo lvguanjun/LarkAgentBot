@@ -379,3 +379,40 @@ Implemented automatic Lark bot identity resolution: bot info API helper and diag
 ### Next Steps
 
 - None - task complete
+
+
+## Session 11: 修复飞书话题持久化
+
+**Date**: 2026-07-05
+**Task**: 修复飞书话题持久化
+**Branch**: `master`
+
+### Summary
+
+修复普通消息创建飞书话题后的 conversation 持久化：adapter 保留 thread_id，核心路由按真实 thread_id 落历史，发送层对 group 与 p2p 普通回复设置 reply_in_thread，并补齐相关单元测试。
+
+### Main Changes
+
+- `IncomingMessage` 保留飞书事件中的 `thread_id`，`SendResult` 把发送响应里的 `message_id`、`root_id`、`thread_id` 带回核心层。
+- `BotApp` 将 group project key 与 p2p project key 分离，conversation history 只按真实 `thread_id` 写入。
+- 普通 group/p2p LLM 回复统一通过 reply API 设置 `reply_in_thread=true`；创建话题后缺少 `thread_id` 时 fail closed，不写入 fallback conversation。
+- 补充 adapter、sender、router、app 的 topic/p2p 持久化单元测试。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `991d30e` | (see git log) |
+
+### Testing
+
+- [OK] `UV_CACHE_DIR=.uv-cache uv run --extra dev pytest` - 107 passed, 2 dependency warnings
+- [OK] `UV_CACHE_DIR=.uv-cache uv run --extra dev python -m compileall src`
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

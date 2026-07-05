@@ -13,7 +13,8 @@
 - [x] 补充 live bot 真实飞书配置与启动说明
 - [ ] 为 `/config set` 设计安全的白名单字段
 - [ ] Webhook 接入
-- [ ] 图片下载、OCR 或 vision 模型支持
+- [ ] OCR 支持
+- [ ] 支持用户自带图片上传接口获取可访问 URL（例如 WebDAV 或通用上传接口）
 - [ ] 飞书卡片消息和交互
 - [ ] 生产部署说明：systemd、容器镜像或其他部署方式
 
@@ -37,3 +38,4 @@
 - [x] MCP 配置加载、tool 发现和调用
 - [x] 运行时 `data/` Git ignore 和默认资源模板
 - [x] Feishu WebSocket 长连接适配、消息转换和文本回复
+- [x] 飞书图片下载和 OpenAI vision 图文消息支持

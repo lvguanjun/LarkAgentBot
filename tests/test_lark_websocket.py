@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import logging
 from types import SimpleNamespace
@@ -27,6 +28,7 @@ from lark_agent.transport.base import (
 )
 from lark_agent.transport.lark import (
     LarkMessageEventAdapter,
+    LarkImageDownloader,
     LarkMessageSender,
     LarkSendError,
     LarkWebSocketBotRunner,
@@ -73,6 +75,19 @@ class FakeResponse:
 class FakeLarkClient:
     def __init__(self, message_api: FakeMessageApi) -> None:
         self.im = SimpleNamespace(v1=SimpleNamespace(message=message_api))
+
+
+class FakeDownloadApi:
+    def __init__(self, *, response: Any | None = None, error: Exception | None = None) -> None:
+        self.response = response
+        self.error = error
+        self.requests: list[Any] = []
+
+    async def aget(self, request: Any) -> Any:
+        self.requests.append(request)
+        if self.error is not None:
+            raise self.error
+        return self.response
 
 
 class FakeBotApp:
@@ -554,6 +569,54 @@ async def test_sender_raises_clear_error_on_failed_response() -> None:
 
     with pytest.raises(LarkSendError, match="code=999"):
         await sender.send_text("chat-1", "hello")
+
+
+async def test_image_downloader_uses_image_api_first() -> None:
+    image_api = FakeDownloadApi(
+        response=SimpleNamespace(
+            file=io.BytesIO(b"\xff\xd8\xffimage"),
+            file_name="photo.jpg",
+            raw=SimpleNamespace(headers={"Content-Type": "image/jpeg"}),
+        )
+    )
+    resource_api = FakeDownloadApi()
+    client = SimpleNamespace(im=SimpleNamespace(v1=SimpleNamespace(
+        image=image_api,
+        message_resource=resource_api,
+    )))
+    downloader = LarkImageDownloader(client)
+
+    image = await downloader.download_image("msg-1", "img-1")
+
+    assert image.data == b"\xff\xd8\xffimage"
+    assert image.mime_type == "image/jpeg"
+    assert image.file_name == "photo.jpg"
+    assert image_api.requests[0].image_key == "img-1"
+    assert resource_api.requests == []
+
+
+async def test_image_downloader_falls_back_to_message_resource_api() -> None:
+    image_api = FakeDownloadApi(error=RuntimeError("image api failed"))
+    resource_api = FakeDownloadApi(
+        response=SimpleNamespace(
+            file=io.BytesIO(b"\x89PNG\r\n\x1a\nimage"),
+            file_name="photo.png",
+            raw=SimpleNamespace(headers={"Content-Type": "image/png"}),
+        )
+    )
+    client = SimpleNamespace(im=SimpleNamespace(v1=SimpleNamespace(
+        image=image_api,
+        message_resource=resource_api,
+    )))
+    downloader = LarkImageDownloader(client)
+
+    image = await downloader.download_image("msg-1", "img-1")
+
+    assert image.data == b"\x89PNG\r\n\x1a\nimage"
+    request = resource_api.requests[0]
+    assert request.message_id == "msg-1"
+    assert request.file_key == "img-1"
+    assert request.queries == [("type", "image")]
 
 
 async def test_runner_schedules_background_task_and_dedupes() -> None:

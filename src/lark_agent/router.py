@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from lark_agent.transport.base import IncomingMessage, MentionPart, TextPart, content_part_text
+from lark_agent.transport.base import ContentPart, IncomingMessage, MentionPart, TextPart, content_part_text
 
 
 LEADING_MENTION_TOKEN_RE = re.compile(r"^(?:\s*@_user_\d+\s*)+")
@@ -41,10 +41,13 @@ class MessageRouter:
         return self.is_bot_mentioned(message) and text.startswith("/")
 
     def normalized_text_content(self, message: IncomingMessage) -> str:
-        if message.chat_type != "group" or not self.is_bot_mentioned(message):
-            return message.text_content()
+        return "".join(content_part_text(part) for part in self.normalized_content_parts(message)).strip()
 
-        parts: list[str] = []
+    def normalized_content_parts(self, message: IncomingMessage) -> list[ContentPart]:
+        if message.chat_type != "group" or not self.is_bot_mentioned(message):
+            return list(message.content)
+
+        parts: list[ContentPart] = []
         dropping_leading_mentions = True
         for part in message.content:
             if dropping_leading_mentions:
@@ -55,19 +58,14 @@ class MessageRouter:
                     if not text:
                         continue
                     dropping_leading_mentions = False
-                    parts.append(text)
+                    parts.append(TextPart(text))
                     continue
 
                 dropping_leading_mentions = False
 
-            if isinstance(part, TextPart):
-                parts.append(part.text)
-            elif isinstance(part, MentionPart):
-                parts.append(part.display_text)
-            else:
-                parts.append(content_part_text(part))
+            parts.append(part)
 
-        return "".join(parts).strip()
+        return parts
 
 
 def _strip_leading_mention_tokens(text: str) -> str:

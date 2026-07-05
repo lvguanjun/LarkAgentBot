@@ -9,7 +9,7 @@ import lark_oapi as lark
 from lark_agent.app import BotApp
 from lark_agent.config import AppConfig, LarkConfig, load_config
 from lark_agent.llm_client import LLMClient
-from lark_agent.transport.lark import LarkMessageSender, LarkWebSocketBotRunner
+from lark_agent.transport.lark import LarkImageDownloader, LarkMessageSender, LarkWebSocketBotRunner
 from lark_agent.transport.lark.bot_info import fetch_lark_bot_info
 
 
@@ -59,10 +59,12 @@ def build_runner(config: AppConfig) -> LarkWebSocketBotRunner:
         }
     )
     sender = LarkMessageSender(lark_client)
+    image_downloader = LarkImageDownloader(lark_client)
     app = BotApp(
         runtime_config,
         sender=sender,
         llm_client=LLMClient.from_config(runtime_config.llm),
+        image_downloader=image_downloader,
     )
     return LarkWebSocketBotRunner(
         app_id=runtime_config.lark.app_id,

@@ -21,6 +21,13 @@ class ImagePart:
 
 
 @dataclass(frozen=True)
+class DownloadedImage:
+    data: bytes
+    mime_type: str = ""
+    file_name: str = ""
+
+
+@dataclass(frozen=True)
 class MentionPart:
     user_id: str
     user_name: str = ""
@@ -203,3 +210,8 @@ class SendResult:
     message_id: str | None = None
     root_id: str | None = None
     thread_id: str | None = None
+
+
+class ImageDownloader(Protocol):
+    async def download_image(self, message_id: str, file_key: str) -> DownloadedImage:
+        ...

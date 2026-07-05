@@ -333,6 +333,117 @@ for turn_message in turn_messages:
     project.get_conversation(final_thread_id).append(turn_message)
 ```
 
+### Scenario: Feishu/Lark Image Message Vision Context
+
+#### 1. Scope / Trigger
+
+- Trigger: Feishu/Lark `image` messages and rich-text `post` image nodes must
+  reach OpenAI-compatible vision models without losing follow-up context.
+- Scope: `transport/base.py`, `transport/lark/`, `router.py`, `images.py`,
+  `app.py`, project runtime storage, conversation JSONL, and tests.
+
+#### 2. Signatures
+
+- `DownloadedImage(data: bytes, mime_type: str = "", file_name: str = "")`
+- `ImageDownloader.download_image(message_id: str, file_key: str) -> DownloadedImage`
+- `MessageRouter.normalized_content_parts(message: IncomingMessage) -> list[ContentPart]`
+- `build_user_message(message_id, parts, project_path, image_downloader) -> Message`
+- `expand_images_for_llm(messages, project_path) -> list[Message]`
+
+#### 3. Contracts
+
+- Feishu/Lark adapters store only image keys in `ImagePart`; they do not
+  download bytes at adapter time.
+- Live Lark image downloads stay in `transport/lark/` and use authenticated
+  Feishu/Lark APIs. Core modules must depend only on `ImageDownloader`.
+- User messages sent to the LLM may use OpenAI Chat Completions multimodal
+  content: text parts use `{"type": "text", "text": "..."}` and image parts
+  use `{"type": "image_url", "image_url": {"url": "data:image/...;base64,..."}}`.
+- `history.jsonl` must not store `data:image/` URLs or raw base64 payloads.
+  Persist image content as a local `image_ref`:
+
+```json
+{
+  "type": "image_ref",
+  "image_ref": {
+    "path": "attachments/images/<digest>.bin",
+    "mime_type": "image/png",
+    "file_key": "img_xxx",
+    "alt_text": "[用户发送了一张图片]"
+  }
+}
+```
+
+- Local image files live under the project root at `attachments/images/`.
+  Context assembly expands `image_ref` back to OpenAI `image_url` data URLs
+  immediately before calling the LLM.
+- Management-command routing uses text projection only and must not download
+  images.
+- Group-message multimodal assembly must use the same leading bot-mention
+  normalization as text command/LLM routing.
+
+#### 4. Validation & Error Matrix
+
+- Missing image downloader -> replace the image part with a download-failed
+  text placeholder; continue handling the message.
+- Feishu/Lark download error, empty response, or unsupported response shape ->
+  replace that image part with a download-failed text placeholder.
+- Missing or unreadable local image file during history replay -> replace that
+  image ref with an unavailable-image text placeholder.
+- Malformed `image_ref.path`, absolute path, or path containing `..` -> treat
+  the image as unavailable; never read outside the project root.
+- Unknown or missing MIME type -> infer from bytes or filename, then fall back
+  to a safe image MIME default.
+
+#### 5. Good/Base/Bad Cases
+
+- Good: `TextPart("look ") + ImagePart("img-1")` persists a text part plus
+  `image_ref`, while the LLM call receives text plus `image_url`.
+- Good: a follow-up message in the same thread rehydrates prior `image_ref`
+  entries before calling the LLM, so "the previous image" remains visible.
+- Good: a download failure keeps the text context and inserts
+  `[用户发送了一张图片，但图片下载失败]`.
+- Base: text-only user messages keep string `content` for compatibility.
+- Bad: writing base64 data URLs directly to `history.jsonl`; this bloats local
+  history and repeats old images on every raw history read.
+- Bad: importing `lark-oapi` from `app.py`, `images.py`, `conversation.py`, or
+  `router.py`.
+- Bad: command handling downloads images before deciding the message is a
+  management command.
+
+#### 6. Tests Required
+
+- App tests must assert Fake LLM receives OpenAI `image_url` data URLs for
+  successful image downloads.
+- App tests must assert `history.jsonl` contains `image_ref`, not `data:image/`.
+- App tests must assert follow-up context rehydrates saved image refs.
+- App tests must assert download failures degrade to text and do not crash
+  `BotApp`.
+- App tests must assert management commands do not call `ImageDownloader`.
+- Lark transport tests must assert downloader request construction for image
+  API and message-resource fallback.
+
+#### 7. Wrong vs Correct
+
+Wrong:
+
+```python
+conversation.append({
+    "role": "user",
+    "content": [{"type": "image_url", "image_url": {"url": data_url}}],
+})
+```
+
+Correct:
+
+```python
+conversation.append({
+    "role": "user",
+    "content": [{"type": "image_ref", "image_ref": image_ref}],
+})
+messages = expand_images_for_llm(conversation.get_context(), project_path=project.path)
+```
+
 ---
 
 ## Examples

@@ -1,3 +1,5 @@
+import base64
+import json
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +11,7 @@ from lark_agent.conversation import Conversation
 from lark_agent.llm_client import LLMClient
 from lark_agent.mcp import MCPConfig, MCPServerConfig
 from lark_agent.transport.base import (
+    DownloadedImage,
     EmojiPart,
     ImagePart,
     IncomingMessage,
@@ -16,6 +19,9 @@ from lark_agent.transport.base import (
     SendResult,
     TextPart,
 )
+
+
+PNG_BYTES = b"\x89PNG\r\n\x1a\nimage-bytes"
 
 
 class FakeLLM:
@@ -68,6 +74,19 @@ class FakeSender:
             }
         )
         return SendResult(message_id="sent-1", root_id=root_id, thread_id=self.thread_id)
+
+
+class FakeImageDownloader:
+    def __init__(self, images: dict[str, DownloadedImage] | None = None) -> None:
+        self.images = images or {}
+        self.calls: list[tuple[str, str]] = []
+
+    async def download_image(self, message_id: str, file_key: str) -> DownloadedImage:
+        self.calls.append((message_id, file_key))
+        image = self.images.get(file_key)
+        if image is None:
+            raise RuntimeError(f"missing image: {file_key}")
+        return image
 
 
 class FakeMCPManager:
@@ -363,10 +382,14 @@ async def test_app_strips_leading_group_post_mention_before_llm(tmp_path: Path) 
     (defaults / "AGENTS.md").write_text("system prompt", encoding="utf-8")
     fake_llm = FakeLLM("assistant reply")
     sender = FakeSender()
+    image_downloader = FakeImageDownloader(
+        {"img-1": DownloadedImage(data=PNG_BYTES, mime_type="image/png", file_name="image.png")}
+    )
     app = BotApp(
         make_config(tmp_path),
         sender=sender,
         llm_client=LLMClient(LLMConfig(model="fake"), client=fake_llm),
+        image_downloader=image_downloader,
     )
     message = IncomingMessage(
         message_id="msg-1",
@@ -385,17 +408,128 @@ async def test_app_strips_leading_group_post_mention_before_llm(tmp_path: Path) 
 
     await app.handle_message(message)
 
+    expected_url = f"data:image/png;base64,{base64.b64encode(PNG_BYTES).decode('ascii')}"
     assert fake_llm.calls == [
         (
             "system prompt",
             [
                 {
                     "role": "user",
-                    "content": "[用户发送了一张图片]这张图说了啥，[表情: Lark_Emoji_Glance_0]",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": expected_url}},
+                        {"type": "text", "text": "这张图说了啥，[表情: Lark_Emoji_Glance_0]"},
+                    ],
                 }
             ],
         ),
     ]
+    assert image_downloader.calls == [("msg-1", "img-1")]
+    history_path = tmp_path / "groups" / "chat-1" / "conversations" / "omt-new" / "history.jsonl"
+    history_text = history_path.read_text(encoding="utf-8")
+    assert "data:image/" not in history_text
+    history = [json.loads(line) for line in history_text.splitlines()]
+    assert history[0]["content"][0]["type"] == "image_ref"
+    assert (tmp_path / "groups" / "chat-1" / history[0]["content"][0]["image_ref"]["path"]).exists()
+
+
+async def test_app_rehydrates_history_image_refs_for_followup(tmp_path: Path) -> None:
+    first_llm = FakeLLM("first reply")
+    sender = FakeSender(thread_id="omt-thread")
+    image_downloader = FakeImageDownloader(
+        {"img-1": DownloadedImage(data=PNG_BYTES, mime_type="image/png", file_name="image.png")}
+    )
+    app = BotApp(
+        make_config(tmp_path),
+        sender=sender,
+        llm_client=LLMClient(LLMConfig(model="fake"), client=first_llm),
+        image_downloader=image_downloader,
+    )
+    await app.handle_message(
+        IncomingMessage(
+            message_id="msg-1",
+            chat_id="chat-1",
+            chat_type="p2p",
+            sender_id="user-1",
+            content=[TextPart("look "), ImagePart(file_key="img-1")],
+        )
+    )
+
+    second_llm = FakeLLM("second reply")
+    app.llm_client = LLMClient(LLMConfig(model="fake"), client=second_llm)
+    await app.handle_message(
+        IncomingMessage(
+            message_id="msg-2",
+            chat_id="chat-1",
+            chat_type="p2p",
+            sender_id="user-1",
+            thread_id="omt-thread",
+            content=[TextPart("刚才那张图呢？")],
+        )
+    )
+
+    expected_url = f"data:image/png;base64,{base64.b64encode(PNG_BYTES).decode('ascii')}"
+    assert second_llm.calls[0][1] == [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "look "},
+                {"type": "image_url", "image_url": {"url": expected_url}},
+            ],
+        },
+        {"role": "assistant", "content": "first reply"},
+        {"role": "user", "content": "刚才那张图呢？"},
+    ]
+
+
+async def test_image_download_failure_degrades_to_text_placeholder(tmp_path: Path) -> None:
+    fake_llm = FakeLLM("assistant reply")
+    image_downloader = FakeImageDownloader()
+    app = BotApp(
+        make_config(tmp_path),
+        sender=FakeSender(),
+        llm_client=LLMClient(LLMConfig(model="fake"), client=fake_llm),
+        image_downloader=image_downloader,
+    )
+    message = IncomingMessage(
+        message_id="msg-1",
+        chat_id="chat-1",
+        chat_type="p2p",
+        sender_id="user-1",
+        content=[TextPart("look "), ImagePart(file_key="missing")],
+    )
+
+    await app.handle_message(message)
+
+    assert fake_llm.calls[0][1] == [
+        {"role": "user", "content": "look [用户发送了一张图片，但图片下载失败]"}
+    ]
+    history_path = tmp_path / "groups" / "user-1" / "conversations" / "omt-new" / "history.jsonl"
+    assert "image_ref" not in history_path.read_text(encoding="utf-8")
+
+
+async def test_management_command_does_not_download_images(tmp_path: Path) -> None:
+    fake_llm = FakeLLM("assistant reply")
+    image_downloader = FakeImageDownloader(
+        {"img-1": DownloadedImage(data=PNG_BYTES, mime_type="image/png")}
+    )
+    app = BotApp(
+        make_config(tmp_path),
+        sender=FakeSender(),
+        llm_client=LLMClient(LLMConfig(model="fake"), client=fake_llm),
+        image_downloader=image_downloader,
+    )
+    message = IncomingMessage(
+        message_id="msg-1",
+        chat_id="chat-1",
+        chat_type="p2p",
+        sender_id="user-1",
+        content=[TextPart("/help "), ImagePart(file_key="img-1")],
+    )
+
+    await app.handle_message(message)
+
+    assert image_downloader.calls == []
+    assert fake_llm.calls == []
 
 
 async def test_config_command_redacts_sensitive_values(tmp_path: Path) -> None:

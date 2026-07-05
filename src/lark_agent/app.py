@@ -1,17 +1,19 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 from lark_agent.commands import ManagementCommandHandler
 from lark_agent.config import AppConfig
 from lark_agent.conversation import Conversation, Message
+from lark_agent.images import build_user_message, expand_images_for_llm
 from lark_agent.llm_client import LLMClient
 from lark_agent.mcp import MCPConfig, MCPManager
 from lark_agent.project import ProjectStore
 from lark_agent.router import MessageRouter
 from lark_agent.tools import BuiltinTools, ToolDispatcher
-from lark_agent.transport.base import IncomingMessage, MessageSender
+from lark_agent.transport.base import ImageDownloader, IncomingMessage, MessageSender
 
 
 MAX_TOOL_ITERATIONS = 5
@@ -31,6 +33,7 @@ class BotApp:
         router: MessageRouter | None = None,
         project_store: ProjectStore | None = None,
         mcp_manager_factory: Any | None = None,
+        image_downloader: ImageDownloader | None = None,
     ) -> None:
         self.config = config
         self.sender = sender
@@ -42,6 +45,7 @@ class BotApp:
         )
         self.mcp_manager_factory = mcp_manager_factory or (lambda mcp_config: MCPManager(mcp_config))
         self.command_handler = ManagementCommandHandler(config)
+        self.image_downloader = image_downloader
 
     async def handle_message(self, message: IncomingMessage) -> str | None:
         if not self.router.should_respond(message):
@@ -67,7 +71,13 @@ class BotApp:
         builtin_tools = BuiltinTools(skills_registry)
         mcp_manager = self._create_mcp_manager(project.get_mcp_config())
 
-        turn_messages: list[Message] = [{"role": "user", "content": user_text}]
+        user_message = await build_user_message(
+            message_id=message.message_id,
+            parts=self.router.normalized_content_parts(message),
+            project_path=project.path,
+            image_downloader=self.image_downloader,
+        )
+        turn_messages: list[Message] = [user_message]
         system_prompt = _build_system_prompt(
             project.get_agents_md(),
             skills_registry.get_system_prompt_fragment(),
@@ -83,7 +93,7 @@ class BotApp:
             for _ in range(MAX_TOOL_ITERATIONS):
                 assistant_message = await self.llm_client.complete_message(
                     system_prompt,
-                    _conversation_context(conversation, turn_messages),
+                    _conversation_context(conversation, turn_messages, project_path=project.path),
                     tools=tools,
                 )
                 tool_calls = assistant_message.get("tool_calls") or []
@@ -153,9 +163,11 @@ def _project_key(message: IncomingMessage) -> str:
 def _conversation_context(
     conversation: Conversation | None,
     turn_messages: list[Message],
+    *,
+    project_path: Path,
 ) -> list[Message]:
     previous_messages = conversation.get_context() if conversation is not None else []
-    return [*previous_messages, *turn_messages]
+    return expand_images_for_llm([*previous_messages, *turn_messages], project_path=project_path)
 
 
 def _message_text(message: dict[str, Any]) -> str:

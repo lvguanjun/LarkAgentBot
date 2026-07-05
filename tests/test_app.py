@@ -3,6 +3,7 @@ from typing import Any
 
 from lark_agent.app import BotApp
 from lark_agent.config import AppConfig, ConversationConfig, LLMConfig, LarkConfig
+from lark_agent.conversation import Conversation
 from lark_agent.llm_client import LLMClient
 from lark_agent.mcp import MCPConfig, MCPServerConfig
 from lark_agent.transport.base import ImagePart, IncomingMessage, TextPart
@@ -180,7 +181,7 @@ async def test_app_ignores_unmentioned_group_message(tmp_path: Path) -> None:
     assert fake_llm.calls == []
 
 
-async def test_app_skips_management_command_boundary(tmp_path: Path) -> None:
+async def test_app_handles_help_command_without_llm_or_history(tmp_path: Path) -> None:
     sender = FakeSender()
     fake_llm = FakeLLM("assistant reply")
     app = BotApp(
@@ -196,8 +197,245 @@ async def test_app_skips_management_command_boundary(tmp_path: Path) -> None:
         content=[TextPart("/help")],
     )
 
-    assert await app.handle_message(message) is None
-    assert sender.sent == []
+    reply = await app.handle_message(message)
+
+    assert reply is not None
+    assert "/config" in reply
+    assert sender.sent == [
+        {
+            "chat_id": "chat-1",
+            "text": reply,
+            "root_id": None,
+            "reply_to_message_id": "msg-1",
+        }
+    ]
+    assert fake_llm.calls == []
+    history_path = tmp_path / "groups" / "chat-1" / "conversations" / "chat-1" / "history.jsonl"
+    assert not history_path.exists()
+
+
+async def test_group_management_command_requires_mention(tmp_path: Path) -> None:
+    sender = FakeSender()
+    fake_llm = FakeLLM("assistant reply")
+    app = BotApp(
+        make_config(tmp_path),
+        sender=sender,
+        llm_client=LLMClient(LLMConfig(model="fake"), client=fake_llm),
+    )
+    unmentioned = IncomingMessage(
+        message_id="msg-1",
+        chat_id="chat-1",
+        chat_type="group",
+        sender_id="user-1",
+        mentions=[],
+        content=[TextPart("/help")],
+    )
+    mentioned = IncomingMessage(
+        message_id="msg-2",
+        chat_id="chat-1",
+        chat_type="group",
+        sender_id="user-1",
+        mentions=["bot-1"],
+        content=[TextPart("/help")],
+    )
+
+    assert await app.handle_message(unmentioned) is None
+    reply = await app.handle_message(mentioned)
+
+    assert reply is not None
+    assert "/reset" in reply
+    assert len(sender.sent) == 1
+    assert sender.sent[0]["reply_to_message_id"] == "msg-2"
+    assert fake_llm.calls == []
+
+
+async def test_config_command_redacts_sensitive_values(tmp_path: Path) -> None:
+    config = AppConfig(
+        data_dir=tmp_path,
+        lark=LarkConfig(app_id="app-id-secret", app_secret="app-secret-value", bot_id="bot-1"),
+        llm=LLMConfig(model="fake", api_key="sk-secret-value", base_url="https://llm.example"),
+        conversation=ConversationConfig(max_messages=7),
+    )
+    sender = FakeSender()
+    fake_llm = FakeLLM("assistant reply")
+    app = BotApp(
+        config,
+        sender=sender,
+        llm_client=LLMClient(LLMConfig(model="fake"), client=fake_llm),
+    )
+    message = IncomingMessage(
+        message_id="msg-1",
+        chat_id="chat-1",
+        chat_type="p2p",
+        sender_id="user-1",
+        content=[TextPart("/config")],
+    )
+
+    reply = await app.handle_message(message)
+
+    assert reply is not None
+    assert "llm.model: fake" in reply
+    assert "conversation.max_messages: 7" in reply
+    assert "llm.api_key: configured" in reply
+    assert "lark.app_secret: configured" in reply
+    assert "app-secret-value" not in reply
+    assert "sk-secret-value" not in reply
+    assert "app-id-secret" not in reply
+    assert "https://llm.example" not in reply
+    assert fake_llm.calls == []
+
+
+async def test_skill_list_command_reports_empty_skills(tmp_path: Path) -> None:
+    sender = FakeSender()
+    fake_llm = FakeLLM("assistant reply")
+    app = BotApp(
+        make_config(tmp_path),
+        sender=sender,
+        llm_client=LLMClient(LLMConfig(model="fake"), client=fake_llm),
+    )
+    message = IncomingMessage(
+        message_id="msg-1",
+        chat_id="chat-1",
+        chat_type="p2p",
+        sender_id="user-1",
+        content=[TextPart("/skill list")],
+    )
+
+    reply = await app.handle_message(message)
+
+    assert reply is not None
+    assert "No skills configured." in reply
+    assert fake_llm.calls == []
+
+
+async def test_skill_list_command_reports_skills_and_discovery_errors(tmp_path: Path) -> None:
+    defaults = tmp_path / "defaults"
+    write_skill(skills_root(defaults), "writer", name="writer", description="Writes concise docs", body="body")
+    invalid_dir = skills_root(defaults) / "broken"
+    invalid_dir.mkdir(parents=True)
+    (invalid_dir / "SKILL.md").write_text("---\nname: broken\n---\n\n# Broken\n", encoding="utf-8")
+    sender = FakeSender()
+    fake_llm = FakeLLM("assistant reply")
+    app = BotApp(
+        make_config(tmp_path),
+        sender=sender,
+        llm_client=LLMClient(LLMConfig(model="fake"), client=fake_llm),
+    )
+    message = IncomingMessage(
+        message_id="msg-1",
+        chat_id="chat-1",
+        chat_type="p2p",
+        sender_id="user-1",
+        content=[TextPart("/skill list")],
+    )
+
+    reply = await app.handle_message(message)
+
+    assert reply is not None
+    assert "- writer: Writes concise docs" in reply
+    assert "Skill discovery errors:" in reply
+    assert "description" in reply
+    assert fake_llm.calls == []
+
+
+async def test_mcp_list_command_redacts_env_values_and_does_not_start_manager(tmp_path: Path) -> None:
+    defaults = tmp_path / "defaults"
+    mcp_dir = mcp_config_root(defaults)
+    mcp_dir.mkdir(parents=True)
+    (mcp_dir / "mcp.yaml").write_text(
+        """
+mcpServers:
+  demo:
+    command: python
+    args: ["-m", "demo"]
+    env:
+      TOKEN: literal-token
+""",
+        encoding="utf-8",
+    )
+    sender = FakeSender()
+    fake_llm = FakeLLM("assistant reply")
+    managers: list[FakeMCPManager] = []
+
+    def make_manager(config: MCPConfig) -> FakeMCPManager:
+        manager = FakeMCPManager(config)
+        managers.append(manager)
+        return manager
+
+    app = BotApp(
+        make_config(tmp_path),
+        sender=sender,
+        llm_client=LLMClient(LLMConfig(model="fake"), client=fake_llm),
+        mcp_manager_factory=make_manager,
+    )
+    message = IncomingMessage(
+        message_id="msg-1",
+        chat_id="chat-1",
+        chat_type="p2p",
+        sender_id="user-1",
+        content=[TextPart("/mcp list")],
+    )
+
+    reply = await app.handle_message(message)
+
+    assert reply is not None
+    assert "demo" in reply
+    assert "args=2" in reply
+    assert "env_keys=TOKEN" in reply
+    assert "literal-token" not in reply
+    assert managers == []
+    assert fake_llm.calls == []
+
+
+async def test_reset_command_clears_only_current_conversation(tmp_path: Path) -> None:
+    current = Conversation(tmp_path / "groups" / "chat-1" / "conversations" / "chat-1")
+    other = Conversation(tmp_path / "groups" / "chat-1" / "conversations" / "root-2")
+    current.append({"role": "user", "content": "current"})
+    other.append({"role": "user", "content": "other"})
+    sender = FakeSender()
+    fake_llm = FakeLLM("assistant reply")
+    app = BotApp(
+        make_config(tmp_path),
+        sender=sender,
+        llm_client=LLMClient(LLMConfig(model="fake"), client=fake_llm),
+    )
+    message = IncomingMessage(
+        message_id="msg-1",
+        chat_id="chat-1",
+        chat_type="p2p",
+        sender_id="user-1",
+        content=[TextPart("/reset")],
+    )
+
+    reply = await app.handle_message(message)
+
+    assert reply == "Conversation reset for thread: chat-1"
+    assert current.get_full_history() == []
+    assert other.get_full_history() == [{"role": "user", "content": "other"}]
+    assert fake_llm.calls == []
+
+
+async def test_unknown_management_command_points_to_help(tmp_path: Path) -> None:
+    sender = FakeSender()
+    fake_llm = FakeLLM("assistant reply")
+    app = BotApp(
+        make_config(tmp_path),
+        sender=sender,
+        llm_client=LLMClient(LLMConfig(model="fake"), client=fake_llm),
+    )
+    message = IncomingMessage(
+        message_id="msg-1",
+        chat_id="chat-1",
+        chat_type="p2p",
+        sender_id="user-1",
+        content=[TextPart("/unknown")],
+    )
+
+    reply = await app.handle_message(message)
+
+    assert reply is not None
+    assert "Unknown command: /unknown" in reply
+    assert "Use /help" in reply
     assert fake_llm.calls == []
 
 

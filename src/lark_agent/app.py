@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from lark_agent.commands import ManagementCommandHandler
 from lark_agent.config import AppConfig
 from lark_agent.llm_client import LLMClient
 from lark_agent.mcp import MCPConfig, MCPManager
@@ -35,15 +36,24 @@ class BotApp:
             max_messages=config.conversation.max_messages,
         )
         self.mcp_manager_factory = mcp_manager_factory or (lambda mcp_config: MCPManager(mcp_config))
+        self.command_handler = ManagementCommandHandler(config)
 
     async def handle_message(self, message: IncomingMessage) -> str | None:
         if not self.router.should_respond(message):
             return None
-        if self.router.is_command(message):
-            return None
 
         project = self.project_store.get_project(message.chat_id)
         thread_id = self.router.get_thread_id(message)
+        if self.router.is_command(message):
+            reply = self.command_handler.handle(message, project, thread_id)
+            await self.sender.send_text(
+                message.chat_id,
+                reply,
+                root_id=message.root_id,
+                reply_to_message_id=message.message_id,
+            )
+            return reply
+
         conversation = project.get_conversation(thread_id)
         skills_registry = project.get_skills_registry()
         builtin_tools = BuiltinTools(skills_registry)

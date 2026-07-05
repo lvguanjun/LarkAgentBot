@@ -20,6 +20,10 @@ class Conversation:
         with self.history_path.open("a", encoding="utf-8") as history:
             history.write(f"{line}\n")
 
+    def clear(self) -> None:
+        if self.history_path.exists():
+            self.history_path.unlink()
+
     def get_full_history(self) -> list[Message]:
         if not self.history_path.exists():
             return []

@@ -25,12 +25,10 @@ minimal Feishu WebSocket adapter:
 - Feishu text replies through the `MessageSender` boundary
 - ack-first WebSocket event handling with in-process TTL deduplication
 - `python -m lark_agent.main` as a minimal live bot entrypoint
+- 管理命令：`/help`、`/config`、`/skill list`、`/mcp list`、`/reset`
 - injectable fake sender and fake LLM clients for local tests
 
-Management commands are still planned.
-
-The next recommended implementation slice is management commands such as
-`/help`, `/config`, `/skill list`, `/mcp list`, and `/reset`.
+`/config set` 等运行时配置写入能力仍在规划中。
 
 ## Requirements
 
@@ -146,6 +144,21 @@ Skill instructions go here.
 `data/groups/<chat_id>/.agents/skills/`，同名时覆盖全局 Skills。模型会先看到
 skill name 和 description，再通过 `read_skill` 读取完整说明或 `references/`
 下的文件。
+
+## 管理命令
+
+管理命令不会调用 LLM，也不会写入普通对话历史。群聊中仍遵守路由规则：需要提及
+机器人且消息文本以 `/` 开头；私聊中 `/` 开头的命令会直接响应。
+
+- `/help`：查看支持的管理命令。
+- `/config`：查看安全配置摘要。敏感值只显示是否已配置，不输出原文。
+- `/skill list`：查看当前聊天可用 Skills 和 discovery error 摘要。
+- `/mcp list`：查看合并后的 MCP server 配置摘要。该命令不启动 MCP server，
+  也不做 tool discovery；env 只显示 key，不输出 value。
+- `/reset`：清空当前 chat/thread 的 conversation history，不影响同一 chat 下
+  其他 thread。
+
+`/config set` 暂未支持，需要先设计可写字段白名单和安全边界。
 
 ## Tests
 

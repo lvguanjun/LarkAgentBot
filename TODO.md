@@ -6,7 +6,7 @@
 
 ## 下一步推荐
 
-- [ ] 管理命令：`/help`、`/config`、`/skill list`、`/mcp list`、`/reset`
+- [x] 管理命令：`/help`、`/config`、`/skill list`、`/mcp list`、`/reset`
 
 ## 待办
 

@@ -14,7 +14,7 @@ This directory contains guidelines for backend development. Fill in each file wi
 
 | Guide | Description | Status |
 |-------|-------------|--------|
-| [Agent Skills Standard](./agent-skills-standard.md) | Skills open standard reference (core domain knowledge) | Done |
+| [Skills Subsystem Guidelines](./agent-skills-standard.md) | Local Skills discovery, prompting, and read_skill contracts | Done |
 | [Directory Structure](./directory-structure.md) | Module organization and file layout | Done |
 | [Database Guidelines](./database-guidelines.md) | ORM patterns, queries, migrations | To fill |
 | [Error Handling](./error-handling.md) | Error types, handling strategies | To fill |

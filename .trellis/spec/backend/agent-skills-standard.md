@@ -1,142 +1,83 @@
-# Agent Skills Standard Reference
+# Skills Subsystem Guidelines
 
-> Source: [Cursor Agent Skills Docs](https://cursor.com/cn/docs/skills) / [agentskills.io](https://agentskills.io)
->
-> This document captures the Agent Skills open standard that our bot's Skills subsystem must follow.
+> Development contract for the bot's local Agent Skills subsystem.
 
 ---
 
-## Core Model
+## Overview
 
-Skills are **passive instruction + resource packages**. They do NOT execute anything themselves.
+Skills are passive instruction and resource packages. They do not execute code
+by themselves; the agent reads Skill instructions and then uses its own native
+tools. Permission isolation belongs at the tool layer.
 
-- A Skill tells the Agent **what to do** and **when to do it**
-- The Agent uses its **own native tools** (read, shell, etc.) to follow the skill's instructions
-- Permission isolation happens at the **tool layer**, not the skill layer
-
-```
-Skill = Instructions (SKILL.md) + Resources (scripts/, references/, assets/)
-Agent = LLM + Native Tools (read, exec, list, ...)
-
-Execution flow:
-  1. Agent sees skill list (name + description from frontmatter)
-  2. Agent decides a skill is relevant → reads full SKILL.md
-  3. SKILL.md says "run scripts/deploy.sh <env>"
-  4. Agent uses its native `exec` tool to run the script
-```
+Keep this file focused on implementation constraints for this project. General
+explanations of the Agent Skills standard or user-facing authoring guidance
+belong in README/reference documentation, not in development spec.
 
 ---
 
-## SKILL.md File Format
+## External Standard Assumptions
 
-```markdown
----
-name: my-skill              # identifier, lowercase + hyphens, must match folder name
-description: Brief desc     # used by agent to judge relevance
-paths: "**/*.py"            # optional: scope to matching files only
-disable-model-invocation: false  # true = slash-command only, no auto-invoke
-metadata: {}                # arbitrary key-value
----
+The project follows the Agent Skills filesystem convention:
 
-# My Skill
-
-Detailed instructions for the agent.
-
-## When to Use
-- condition A
-- condition B
-
-## Instructions
-- step-by-step guidance
-- reference scripts: `scripts/foo.sh`
-- reference docs: `references/REFERENCE.md`
+```text
+<skills-root>/
+`-- <skill-dir>/
+    |-- SKILL.md
+    |-- references/
+    |-- scripts/
+    `-- assets/
 ```
 
----
+Only `SKILL.md` and files under `references/` are currently exposed to the LLM.
+`scripts/`, `assets/`, and generic filesystem reads are out of scope for the
+MVP.
 
-## Directory Structure
-
-```
-skills/
-└── <skill-name>/
-    ├── SKILL.md          # required: instructions + frontmatter
-    ├── scripts/          # optional: executable code agent can run
-    │   ├── deploy.sh
-    │   └── validate.py
-    ├── references/       # optional: additional docs loaded on demand
-    │   └── REFERENCE.md
-    └── assets/           # optional: templates, configs, static files
-        └── config-template.json
-```
+`SKILL.md` must use YAML frontmatter with non-empty string `name` and
+`description`. The frontmatter `name` is the LLM-facing identifier; directory
+names are internal filesystem locators.
 
 ---
 
-## Three-Tier Progressive Loading
+## Module Ownership
 
-| Tier | What | When | Cost |
-|------|------|------|------|
-| Tier 1: Discovery | name + description (frontmatter) | Always loaded at startup | Minimal (one line per skill in system prompt) |
-| Tier 2: Activation | Full SKILL.md body | Agent decides skill is relevant | Medium (full instructions into context) |
-| Tier 3: Execution | scripts/, references/, assets/ | Agent follows instructions to read/run | Variable (file reads, script execution) |
+Skills-related behavior is owned by:
 
----
+- `src/lark_agent/skills.py`: discovery, metadata parsing, merging, validation,
+  system prompt fragment, and bounded reference reads.
+- `src/lark_agent/tools.py`: built-in tool schema and dispatch for `read_skill`.
+- `src/lark_agent/project.py`: default and group Skills root resolution.
+- `src/lark_agent/app.py`: prompt assembly, tool loop orchestration, persistence,
+  and final reply behavior.
+- `src/lark_agent/llm_client.py`: OpenAI-compatible request/response shape for
+  tool calls.
 
-## Key Design Principles
-
-1. **Agent-tool separation**: Skills don't "have" tools. The agent has tools. Skills tell the agent how to use them.
-
-2. **Scripts are passive**: `scripts/deploy.sh` is just a file sitting there. The agent's `exec` tool runs it. The permission boundary is on the exec tool, not on the skill.
-
-3. **Progressive context efficiency**: Only load what's needed. Tier 1 costs ~1 line per skill. Tier 2 costs the full SKILL.md. Tier 3 costs individual file reads.
-
-4. **Portability**: Skills work across any agent that supports the standard (Cursor, Claude Code, Codex, etc.)
-
-5. **Version-controlled**: Skills live in the filesystem, tracked by git.
+Do not duplicate Skills metadata parsing or path validation in consumers.
 
 ---
 
-## Implications for Our Bot Design
+## Discovery Contract
 
-### The bot needs native tools
-
-Since skills don't execute anything themselves, the bot's LLM must have built-in tools to:
-- Read files (skill references, project docs)
-- Execute scripts (skill scripts)
-- List directory contents (discover available resources)
-
-### Permission model lives on tools, not skills
-
-A skill that includes `scripts/rm-everything.sh` is harmless if the bot's exec tool:
-- Only allows execution within skill `scripts/` directories
-- Runs with restricted env vars
-- Has timeout enforcement
-- Has no network access (unless explicitly allowed)
-
-### Skills are just context injection with resource pointers
-
-The SKILL.md body goes into the LLM context. Any `scripts/` or `references/` paths mentioned in it are resources the LLM can choose to access via its tools.
+- Discover default Skills from `data/defaults/.agents/skills/<dir>/SKILL.md`.
+- Discover group Skills from
+  `data/groups/<chat_id>/.agents/skills/<dir>/SKILL.md`.
+- Do not treat `data/defaults/skills/` or `data/groups/<chat_id>/skills/` as
+  fallback locations.
+- Missing Skills directories return an empty registry without error.
+- Invalid or missing frontmatter skips that Skill and records a `SkillLoadError`.
+- Group Skills override default Skills by frontmatter `name`; non-conflicting
+  Skills are merged.
+- Tier 1 prompt content may include only Skill `name`, `description`, and the
+  instruction to call `read_skill`. It must not include full Skill bodies or
+  reference file contents.
 
 ---
 
-## Implementation Contract: MVP `read_skill`
+## Built-In Tool Contract
 
-### 1. Scope / Trigger
-
-This contract applies when implementing or modifying the bot's Skills subsystem:
-
-- `src/lark_agent/skills.py`
-- `src/lark_agent/tools.py`
-- `Project.get_skills_registry()`
-- `BotApp` system prompt and tool loop integration
-
-The MVP supports read-only Skills. It does not execute `scripts/`, read `assets/`,
-or expose a generic filesystem tool.
-
-### 2. Signatures
+The MVP exposes one safe built-in tool:
 
 ```python
-SkillsRegistry.discover(defaults_dir: Path, project_dir: Path) -> SkillsRegistry
-SkillsRegistry.get_system_prompt_fragment() -> str
 SkillsRegistry.read_skill(name: str, file: str | None = None) -> str
 BuiltinTools.get_tools_for_llm() -> list[dict[str, Any]]
 BuiltinTools.call_tool(name: str, args: dict[str, Any]) -> str
@@ -148,93 +89,66 @@ LLMClient.complete_message(
 ) -> dict[str, Any]
 ```
 
-### 3. Contracts
-
-- Discovery reads `data/defaults/.agents/skills/<dir>/SKILL.md` and
-  `data/groups/<chat_id>/.agents/skills/<dir>/SKILL.md`.
-- Direct `data/defaults/skills/` and `data/groups/<chat_id>/skills/`
-  directories are not fallback locations.
-- `SKILL.md` must contain YAML frontmatter with non-empty string `name` and
-  `description`.
-- The frontmatter `name` is the LLM-facing identifier. Directory names are only
-  internal filesystem locators.
-- Group Skills override default Skills by frontmatter `name`; non-conflicting
-  Skills are merged.
-- Tier 1 system prompt content may include only Skill `name` and `description`,
-  plus instructions to call `read_skill`. It must not include full Skill bodies
-  or reference file content.
 - `read_skill(name)` returns the selected Skill's full `SKILL.md`.
 - `read_skill(name, file="references/...")` returns a file under that Skill's
   `references/` directory.
-- Tool loop history must use OpenAI message shape:
+- Unknown Skill names return model-visible `Error:` text.
+- Absolute paths, `..`, non-`references/` paths, and symlink escapes return
+  model-visible `Error:` text before reading.
+- Tool argument errors are ordinary model-visible failures and should not crash
+  `BotApp.handle_message()`.
+- The tool loop must persist the complete OpenAI message chain:
   `user -> assistant(tool_calls) -> tool -> assistant(final)`.
+- If the tool loop exceeds the configured maximum iterations, persist an
+  assistant error message and return it.
 
-### 4. Validation & Error Matrix
+---
 
-| Condition | Behavior |
-|-----------|----------|
-| Missing `skills/` directory | Return empty registry, no error |
-| `SKILL.md` missing or invalid frontmatter | Skip that Skill and add `SkillLoadError` |
-| Unknown Skill name | Return `Error: unknown skill 'name'` |
-| `file` is absolute | Return `Error:` text |
-| `file` contains `..` | Return `Error:` text |
-| `file` is outside `references/` | Return `Error:` text |
-| `file` symlink resolves outside `references/` | Return `Error:` text |
-| Tool loop exceeds max iterations | Persist an assistant error message and return it |
+## Forbidden Patterns
 
-Tool errors are model-visible text. They should not crash `BotApp.handle_message()`
-for ordinary bad tool arguments.
+- Do not expose generic file reads to the LLM; they can leak config, MCP
+  credentials, conversation history, or local runtime data.
+- Do not include full Skill bodies in the Tier 1 system prompt.
+- Do not use Skill directory names as the public identifier when frontmatter
+  provides `name`.
+- Do not execute Skill scripts or read Skill assets until the tool permission
+  model is explicitly designed and tested.
+- Do not crash message handling for ordinary bad tool arguments.
 
-### 5. Good/Base/Bad Cases
+---
 
-- Good: a group Skill named `writer` overrides a default Skill with the same
-  frontmatter `name`, and `read_skill("writer")` returns the group `SKILL.md`.
-- Base: no Skills exist, so `tools=[]` and the system prompt remains equivalent
-  to the AGENTS.md-only core path.
-- Bad: `read_skill("writer", file="../config.yaml")` must be rejected before any
-  filesystem read outside the Skill references boundary.
+## Required Tests
 
-### 6. Tests Required
-
-When changing this subsystem, tests must assert:
+When changing the Skills subsystem, tests must cover:
 
 - frontmatter discovery and invalid metadata reporting
 - default/group merge and override behavior
-- Tier 1 prompt excludes full Skill body
-- `read_skill` reads `SKILL.md` and `references/...`
-- path rejection for absolute paths, `..`, non-reference paths, and symlink escape
-- fake LLM tool_call executes through `BuiltinTools` and persists the complete
-  OpenAI message chain
+- Tier 1 prompt excluding full Skill bodies and reference content
+- `read_skill` reading `SKILL.md` and allowed `references/...` files
+- rejection of absolute paths, `..`, non-reference paths, and symlink escapes
+- fake LLM tool calls executing through `BuiltinTools`
+- complete OpenAI message-chain persistence for tool calls
+- max-iteration failure behavior
 
-### 7. Wrong vs Correct
+---
 
-#### Wrong
+## Examples
+
+Wrong:
 
 ```python
 # Generic file reads expose config, MCP credentials, or conversation history.
 read_file("../../../config.yaml")
 ```
 
-#### Correct
+Correct:
 
 ```python
-# The LLM names a Skill; the tool resolves the Skill internally and only permits
+# The LLM names a Skill; the tool resolves it internally and only permits
 # SKILL.md or references/ reads.
 read_skill("writer", file="references/style.md")
 ```
 
----
-
-## Comparison: MCP Tools vs Skills
-
-| Aspect | MCP Tools | Skills |
-|--------|-----------|--------|
-| What they provide | Executable capabilities (functions) | Instructions + resources |
-| Who executes | MCP server process | Agent via its native tools |
-| Discovery | Tool list from MCP server | SKILL.md frontmatter scan |
-| Invocation | LLM returns tool_call → MCP server handles | LLM reads SKILL.md → uses native tools |
-| Permission | MCP server controls its own scope | Native tool layer controls scope |
-| Statefulness | MCP server can maintain state | Stateless (just files) |
-| Use case | External services, APIs, databases | Workflows, conventions, reusable procedures |
-
-Both coexist: MCP provides capabilities, Skills provide knowledge + workflows that may use those capabilities.
+MCP tools and Skills remain separate concepts: MCP provides executable external
+capabilities, while Skills provide local instructions and bounded read-only
+resources.

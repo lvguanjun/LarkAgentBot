@@ -180,3 +180,36 @@ Updated the project Python requirement to >=3.13, resolved runtime and dev direc
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: Runtime data Git hygiene
+
+**Date**: 2026-07-05
+**Task**: Runtime data Git hygiene
+**Branch**: `master`
+
+### Summary
+
+Moved runtime defaults out of tracked data into templates/defaults, ignored local data/, updated README and backend directory spec, verified ignored conversation history and full tests, then archived the lightweight task.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bc9fe71` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

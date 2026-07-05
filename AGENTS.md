@@ -33,3 +33,7 @@ If the documentation is intended for humans, write it in **Chinese**. If the doc
 
 - Use src layout python package structure
 - Always use absolute imports
+
+## Development Stage
+
+- This project is in active development. Do not implement backward-compatibility code paths; every change should follow the current best-practice design and keep the codebase fully up to date.

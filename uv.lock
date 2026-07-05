@@ -378,6 +378,9 @@ dependencies = [
     { name = "lark-oapi" },
     { name = "mcp" },
     { name = "openai" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "python-dotenv" },
     { name = "pyyaml" },
 ]
 
@@ -392,8 +395,11 @@ requires-dist = [
     { name = "lark-oapi", specifier = ">=1.7.0" },
     { name = "mcp", specifier = ">=1.28.1" },
     { name = "openai", specifier = ">=2.44.0" },
+    { name = "pydantic", specifier = ">=2.13.4" },
+    { name = "pydantic-settings", specifier = ">=2.14.2" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.1.1" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=1.4.0" },
+    { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "pyyaml", specifier = ">=6.0.3" },
 ]
 provides-extras = ["dev"]

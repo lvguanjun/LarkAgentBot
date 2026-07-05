@@ -18,7 +18,7 @@ that can be tested without live Feishu, OpenAI, Skills, or MCP services.
 src/
 └── lark_agent/
     ├── app.py              # Application orchestration
-    ├── config.py           # Typed YAML configuration loading
+    ├── config.py           # Typed environment/.env configuration loading
     ├── agents_conf.py      # AGENTS.md fallback loading
     ├── conversation.py     # JSONL history persistence and context windowing
     ├── llm_client.py       # OpenAI-compatible client wrapper
@@ -42,7 +42,7 @@ src/
   implementation files unless they truly need an internal helper.
 - Put one cross-layer contract owner next to the data it owns:
   `conversation.py` owns history JSONL message grouping, `project.py` owns
-  filesystem path layout, and `config.py` owns YAML decoding.
+  filesystem path layout, and `config.py` owns application settings decoding.
 - Prefer constructor injection for external clients (`LLMClient`, sender
   protocols) so tests can use fakes without network or credentials.
 
@@ -81,6 +81,103 @@ src/
 - `src/lark_agent/conversation.py`: JSONL persistence and windowing owned in one
   module instead of repeated parsing in consumers.
 
+## Scenario: Application Environment Configuration
+
+### 1. Scope / Trigger
+
+- Trigger: application-level configuration for live bot credentials, LLM
+  settings, runtime data directory, and conversation window size.
+- `config.py` owns decoding from process environment and `.env` into internal
+  typed config objects. Do not add application-level YAML config loaders.
+
+### 2. Signatures
+
+- `load_config(*, data_dir: str | Path | None = None) -> AppConfig`
+- `python -m lark_agent.main`
+- Internal access shape:
+  - `config.data_dir`
+  - `config.lark.app_id`
+  - `config.lark.app_secret`
+  - `config.lark.bot_id`
+  - `config.llm.api_key`
+  - `config.llm.base_url`
+  - `config.llm.model`
+  - `config.conversation.max_messages`
+
+### 3. Contracts
+
+- Settings use `pydantic-settings` with:
+  - `env_prefix="LARK_AGENT_"`
+  - `env_file=".env"`
+  - `env_nested_delimiter="__"`
+- Public environment keys:
+  - `LARK_AGENT_DATA_DIR`
+  - `LARK_AGENT_LARK__APP_ID`
+  - `LARK_AGENT_LARK__APP_SECRET`
+  - `LARK_AGENT_LARK__BOT_ID`
+  - `LARK_AGENT_LLM__API_KEY`
+  - `LARK_AGENT_LLM__BASE_URL`
+  - `LARK_AGENT_LLM__MODEL`
+  - `LARK_AGENT_CONVERSATION__MAX_MESSAGES`
+- Source priority, highest first:
+  1. Explicit `load_config(data_dir=...)`
+  2. Real process environment variables
+  3. Current-working-directory `.env`
+  4. Code defaults
+- Relative `data_dir` values resolve against the current working directory.
+
+### 4. Validation & Error Matrix
+
+- Empty `LARK_AGENT_DATA_DIR` -> Pydantic validation error.
+- Non-integer `LARK_AGENT_CONVERSATION__MAX_MESSAGES` -> Pydantic validation
+  error.
+- Missing live Feishu credentials at runner startup -> `validate_lark_config`
+  raises `ValueError` naming the missing `lark.*` fields.
+- Unknown extra values in `.env` -> ignored by application settings.
+
+### 5. Good/Base/Bad Cases
+
+- Good: `LARK_AGENT_LLM__API_KEY=sk-...` maps to `config.llm.api_key`.
+- Base: no `.env` and no relevant process environment yields code defaults.
+- Bad: reintroducing `config.yaml` or `--config` for application settings
+  violates the active-development no-backward-compatibility rule.
+
+### 6. Tests Required
+
+- Defaults resolve `data_dir` from the current working directory.
+- `.env` populates nested `lark`, `llm`, and `conversation` settings.
+- Real environment variables override `.env`.
+- Explicit `data_dir` overrides every settings source.
+- `LARK_AGENT_LLM__API_KEY` and `LARK_AGENT_CONVERSATION__MAX_MESSAGES` preserve
+  field underscores through the `__` nested delimiter.
+- Invalid integer and empty data directory values raise validation errors.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+def load_config(path: str = "config.yaml") -> AppConfig:
+    raw = yaml.safe_load(Path(path).read_text())
+    ...
+```
+
+This adds a second application configuration path and makes users maintain both
+YAML and environment files.
+
+#### Correct
+
+```python
+class AppSettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="LARK_AGENT_",
+        env_file=".env",
+        env_nested_delimiter="__",
+    )
+```
+
+Environment variables and `.env` are the application configuration boundary.
+
 ## Scenario: Feishu WebSocket Transport Adapter
 
 ### 1. Scope / Trigger
@@ -97,7 +194,7 @@ src/
 - `LarkMessageEventAdapter.dedupe_key(event) -> str | None`
 - `LarkMessageSender.send_text(chat_id, text, *, root_id=None, reply_to_message_id=None) -> None`
 - `LarkWebSocketBotRunner.handle_event(event) -> None`
-- `python -m lark_agent.main --config config.yaml`
+- `python -m lark_agent.main`
 
 ### 3. Contracts
 

@@ -48,10 +48,9 @@ def build_runner(config: AppConfig) -> LarkWebSocketBotRunner:
 
 def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Run the Lark Agent Feishu WebSocket bot.")
-    parser.add_argument("--config", default="config.yaml", help="Path to config.yaml")
-    args = parser.parse_args(argv)
+    parser.parse_args(argv)
 
-    config = load_config(args.config)
+    config = load_config()
     build_runner(config).start()
 
 

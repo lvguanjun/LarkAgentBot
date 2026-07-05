@@ -10,7 +10,7 @@
 
 ## 待办
 
-- [ ] 补充 live bot 真实飞书配置与启动说明
+- [x] 补充 live bot 真实飞书配置与启动说明
 - [ ] 为 `/config set` 设计安全的白名单字段
 - [ ] Webhook 接入
 - [ ] 图片下载、OCR 或 vision 模型支持

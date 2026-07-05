@@ -48,6 +48,12 @@ src/
 - Use lowercase snake_case module names.
 - Runtime group data lives under `data/groups/<chat_id>/`.
 - Default project resources live under `data/defaults/`.
+- The entire runtime `data/` directory is local state and must be ignored by
+  Git. Do not commit real group conversations, local defaults, group config, or
+  MCP connection details from this path.
+- Committed bootstrap defaults live under `templates/defaults/`, with a layout
+  that mirrors the runtime `data/defaults/` directory. Developers copy these
+  templates into local `data/defaults/` before running the bot.
 - Agent assets live under `.agents/` below the default or group root:
   `data/defaults/.agents/skills/`,
   `data/defaults/.agents/mcp.yaml`,

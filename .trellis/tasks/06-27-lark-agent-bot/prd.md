@@ -107,12 +107,21 @@
 - 截断按完整"轮次"进行，不切断 tool_call/tool_result 配对
 - 私聊无话题时，使用 `chat_id` 本身作为默认 conversation
 
+### R10: 数据隐私与版本控制边界
+
+- 运行时群组数据不得进入 Git，包括 `data/groups/<chat_id>/conversations/<thread_id>/history.jsonl` 中的群聊/私聊消息。
+- `data/` 是本地运行时目录，不应作为仓库中的可共享配置目录；这包括 `data/defaults/`，因为默认 AGENTS、默认 Skills、默认 MCP 配置也可能体现开发者/部署者偏好或包含敏感连接信息。
+- 仓库应在 `templates/defaults/` 提供默认资源模板，供开发者复制到本地 `data/defaults/`；模板必须去标识化，不包含真实群组消息、真实群组配置、真实 MCP 密钥或个人化默认人格。
+- `.gitignore` 必须显式忽略运行时 `data/`，避免运行机器人后误提交群组消息或本地默认配置。
+- 若后续需要提交群组级示例配置，应使用去标识化 fixture、example 或 `templates/` 目录，不复用运行时 `data/groups/` 路径。
+
 ## Technical Notes
 
 - Python 3.11+
 - 依赖：`lark-oapi`（飞书 SDK）、`mcp`（MCP SDK）、`openai`（LLM 客户端）、`pyyaml`
 - 飞书话题通过消息事件的 `root_id` 字段识别
 - 长连接使用 `lark.ws.Client`，事件处理使用 `EventDispatcherHandler`
+- 当前证据显示 `.gitignore:1` 到 `.gitignore:6` 尚未忽略 `data/`；`README.md:42` 到 `README.md:66` 与本 PRD 的 R9 约定运行时对话历史会写入 `data/groups/<chat_id>/conversations/<thread_id>/history.jsonl`。当前 Git 已追踪的 `data/` 文件仅为 `data/defaults/AGENTS.md`，尚未发现已追踪的群组消息文件。
 
 ## Acceptance Criteria
 
@@ -126,6 +135,9 @@
 - [ ] MCP tools 能被发现、列举、执行，结果返回给 LLM
 - [x] 对话历史正确持久化为 JSONL，包含完整 tool_calls 链路
 - [x] 滑动窗口截断后 LLM 仍能正常工作（不切断 tool 配对）
+- [ ] Git 默认不会显示或提交运行时数据；创建 `data/groups/<chat_id>/conversations/<thread_id>/history.jsonl` 后，`git status --short` 不应列出该文件
+- [ ] Git 默认不会显示或提交本地默认资源；修改 `data/defaults/AGENTS.md` 后，`git status --short` 不应列出该文件
+- [ ] 仓库在 `templates/defaults/` 提供去标识化模板，开发者可据此初始化本地 `data/defaults/`，但模板不位于运行时 `data/` 路径
 - [ ] `/config` 等管理指令可查看/修改群组配置
 
 ## Task Map
@@ -133,7 +145,8 @@
 - `07-04-lark-agent-bot-core` ✅ archived: first independently verifiable child task. Built the Python package skeleton, local configuration, transport base types, routing rules, Project/Conversation persistence, AGENTS.md fallback, and a fake-LLM text conversation loop. It intentionally excluded live Feishu WebSocket integration, Skills, MCP, and management commands.
 - `07-04-lark-agent-bot-skills` ✅ archived: second independently verifiable child task. Built Skills discovery, Tier 1 system prompt injection, the safe `read_skill` built-in tool, and a bounded OpenAI-compatible tool loop that persists user → assistant(tool_calls) → tool → assistant(final). It intentionally excluded live Feishu WebSocket integration, MCP tools, Skills script execution, and management commands.
 - `07-04-lark-agent-bot-agents-layout` ✅ complete: lightweight child task that moved Skills discovery and MCP planning paths under each project `.agents/` directory instead of placing them directly in the chat group root.
-- Recommended next child task: `lark-agent-bot-mcp`. Scope should cover `.agents/mcp.yaml` loading/fallback, MCP stdio client lifecycle, MCP tool discovery, conversion to OpenAI function tool schemas, dispatching MCP tool calls through the existing tool loop, JSONL persistence of MCP tool results, fake/in-memory MCP tests, and no live Feishu dependency.
+- `07-05-runtime-data-git-hygiene` ⏳ planned: next lightweight child task. Scope covers ignoring local runtime `data/`, moving committed default resources to `templates/defaults/`, and updating README initialization instructions before any more default/MCP resources are added.
+- Recommended following child task: `lark-agent-bot-mcp`. Scope should cover `.agents/mcp.yaml` loading/fallback, MCP stdio client lifecycle, MCP tool discovery, conversion to OpenAI function tool schemas, dispatching MCP tool calls through the existing tool loop, JSONL persistence of MCP tool results, fake/in-memory MCP tests, and no live Feishu dependency.
 - Later child tasks: live Feishu WebSocket adapter, then management commands (`/help`, `/config`, `/skill list`, `/mcp list`, `/reset`) once MCP and live transport boundaries exist.
 
 ## Current Implementation Snapshot
@@ -144,6 +157,19 @@
 - The existing OpenAI-compatible LLM path already supports `tools` and assistant `tool_calls`, which makes MCP the lowest-friction next integration.
 
 ## Decisions Log
+
+### D4: `data/` 版本控制边界 ✅ 已决策
+
+- 采用“忽略整个运行时 `data/`，仓库只提交模板目录”的策略。
+- `data/defaults/` 也不上仓，因为默认 AGENTS、默认 Skills、默认 MCP 配置会体现开发者/部署者偏好，MCP 配置还可能靠近敏感连接信息。
+- 仓库中的默认资源必须迁移为去标识化模板，由开发者复制到本地 `data/defaults/` 后使用。
+- 接受的代价：本地初始化多一步复制模板；收益是避免真实群组消息、本地默认配置、个人偏好和敏感连接信息误提交。
+
+### D5: 默认资源模板目录 ✅ 已决策
+
+- 默认资源模板统一放在 `templates/defaults/`。
+- `templates/defaults/` 的目录结构应对应运行时 `data/defaults/`，例如 `templates/defaults/AGENTS.md` 可复制为 `data/defaults/AGENTS.md`。
+- 选择 `templates/defaults/` 而不是 `examples/`，因为这些文件是可直接复制的初始化模板，不只是参考示例。
 
 ### D1: 内置 Tools — MVP 专用 `read_skill` ✅ 已决策
 

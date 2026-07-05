@@ -33,6 +33,14 @@ UV_CACHE_DIR=.uv-cache uv run --extra dev pytest
 
 ## Remaining Work
 
+### Next Recommended Child: Runtime Data Git Hygiene
+
+- [ ] Add `data/` to `.gitignore` so runtime group messages and local defaults are not shown by `git status`.
+- [ ] Move committed default resources from `data/defaults/` to `templates/defaults/`.
+- [ ] Update README setup instructions to copy templates into local `data/defaults/`.
+- [ ] Verify generated `data/groups/<chat_id>/conversations/<thread_id>/history.jsonl` and local edits to `data/defaults/AGENTS.md` stay ignored.
+- [ ] Verify `templates/defaults/AGENTS.md` remains tracked as the de-identified bootstrap template.
+
 ### Next Recommended Child: MCP Tools
 
 - [ ] `mcp_manager.py`: MCP Client 连接管理、tools 发现、tool 执行

@@ -46,8 +46,14 @@
 lark_agent/
 ├── pyproject.toml
 ├── config.yaml                 # 全局配置
-├── data/
-│   ├── defaults/               # 全局默认配置
+├── templates/
+│   └── defaults/               # 可提交的默认资源模板
+│       ├── AGENTS.md
+│       └── .agents/
+│           ├── skills/
+│           └── mcp.yaml
+├── data/                       # 本地运行时目录，整体不进 Git
+│   ├── defaults/               # 本地全局默认配置，由 templates/defaults/ 初始化
 │   │   ├── AGENTS.md
 │   │   └── .agents/
 │   │       ├── skills/
@@ -79,6 +85,12 @@ lark_agent/
 │       ├── llm_client.py       # LLM 调用（含 tool loop）
 │       └── commands.py         # 斜杠命令处理
 ```
+
+Version-control boundary:
+
+- `data/` is local runtime state and must be ignored by Git.
+- `templates/defaults/` is the committed, de-identified template source for initializing local `data/defaults/`.
+- Runtime code continues to read defaults from `data/defaults/`; templates are an operator/developer bootstrap artifact, not a second runtime lookup path.
 
 Current code status:
 

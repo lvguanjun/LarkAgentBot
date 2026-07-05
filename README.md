@@ -12,7 +12,7 @@ The current implementation is a local, transport-independent bot core:
 - group, private chat, mention, command, and activated-thread routing rules
 - per-chat project directories with `AGENTS.md` fallback loading
 - JSONL conversation history persistence and context windowing
-- Skills discovery from `data/defaults/.agents/skills/` and
+- Skills discovery from local `data/defaults/.agents/skills/` and
   `data/groups/<chat_id>/.agents/skills/`
 - Tier 1 Skills list injection into the system prompt
 - safe built-in `read_skill(name, file?)` tool for SKILL.md and reference files
@@ -39,8 +39,25 @@ Install the package with development dependencies:
 uv sync --extra dev
 ```
 
-The default configuration lives in `config.yaml`. Runtime data is written under
-`data/` by default:
+`config.yaml` 是全局配置文件。`data/` 是本地运行时目录，默认被 Git
+忽略，不应提交群组消息、本地 defaults、群组配置或 MCP 连接配置。
+
+仓库提供可复制的默认资源模板：
+
+```text
+templates/
+└── defaults/
+    └── AGENTS.md
+```
+
+初始化本地默认资源时，将模板复制到运行时目录：
+
+```bash
+mkdir -p data
+cp -R templates/defaults data/defaults
+```
+
+运行时数据默认写入 `data/`：
 
 ```text
 data/
@@ -87,8 +104,8 @@ conversation:
   max_messages: 40
 ```
 
-`data/defaults/AGENTS.md` is used as the default system prompt. A chat-specific
-`data/groups/<chat_id>/AGENTS.md` overrides it when present.
+本地 `data/defaults/AGENTS.md` 会作为默认 system prompt。存在群组级
+`data/groups/<chat_id>/AGENTS.md` 时，群组级文件优先生效。
 
 ## Skills
 
@@ -106,11 +123,10 @@ description: Use this when the assistant needs example behavior.
 Skill instructions go here.
 ```
 
-Global skills live under `data/defaults/.agents/skills/`. Chat-specific skills
-live under `data/groups/<chat_id>/.agents/skills/` and override global skills
-with the same skill name. The model first sees only skill names and
-descriptions, then can call `read_skill` to read full instructions or files
-under `references/`.
+全局 Skills 位于本地 `data/defaults/.agents/skills/`。群组级 Skills 位于
+`data/groups/<chat_id>/.agents/skills/`，同名时覆盖全局 Skills。模型会先看到
+skill name 和 description，再通过 `read_skill` 读取完整说明或 `references/`
+下的文件。
 
 ## Tests
 

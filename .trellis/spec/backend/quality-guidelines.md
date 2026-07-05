@@ -17,6 +17,8 @@ module installed.
 - Do not add external SDK imports to core modules that are meant to be tested
   locally. Keep SDK adapters at the edge and depend on typed internal
   dataclasses/protocols.
+- Do not hard-code dependency versions from memory or model knowledge. Resolve
+  the current compatible release with `uv` at implementation time.
 - Do not parse history JSONL fields in multiple consumers. `conversation.py`
   owns history decoding and context windowing.
 - Do not hard-truncate an `assistant(tool_calls)` message away from its
@@ -30,6 +32,21 @@ module installed.
 - Use `uv` for dependency resolution and test execution.
 - In restricted Codex sandboxes, set `UV_CACHE_DIR=.uv-cache` so uv writes cache
   data inside the workspace.
+- Treat Python 3.13 as the dependency resolution baseline. When adding or
+  upgrading runtime or development dependencies, resolve the latest stable
+  version compatible with Python 3.13 through `uv`; do not limit choices to the
+  versions already present in `pyproject.toml`.
+- Prefer `uv` commands that update both project metadata and `uv.lock`, for
+  example:
+
+```bash
+UV_CACHE_DIR=.uv-cache uv add --python 3.13 <package>
+UV_CACHE_DIR=.uv-cache uv add --python 3.13 --optional dev <package>
+UV_CACHE_DIR=.uv-cache uv lock --python 3.13 --upgrade-package <package>
+```
+
+- Only pin an exact dependency version when a compatibility issue, reproducible
+  bug, or upstream regression requires it; document the reason near the change.
 - Keep external clients injectable so tests can run without live credentials or
   network access.
 
@@ -54,6 +71,8 @@ client/sender orchestration.
 ## Code Review Checklist
 
 - Tests pass with `uv`, not a globally installed pytest.
+- New or updated dependencies were resolved with `uv` against Python 3.13, not
+  copied from existing `pyproject.toml` bounds or model knowledge.
 - New runtime files are not generated artifacts (`.venv/`, `.uv-cache/`,
   `__pycache__/`, `*.egg-info/`).
 - Cross-layer payloads are decoded in one owner module.

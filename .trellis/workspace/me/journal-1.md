@@ -346,3 +346,36 @@ Implemented automatic Lark bot identity resolution: bot info API helper and diag
 ### Next Steps
 
 - None - task complete
+
+
+## Session 10: 飞书消息内容归一化
+
+**Date**: 2026-07-05
+**Task**: 飞书消息内容归一化
+**Branch**: `master`
+
+### Summary
+
+实现飞书/Lark 接收消息内容归一化：扩展内部 content part 模型，覆盖 text/post/image/附件/卡片/业务消息等已知类型；命令和 LLM 输入统一使用归一化 projection；新增 INFO 级别有界对比日志，支持对照原始 content、归一化 part 和文本投影；补充代表性 adapter/router/app/runner 测试并同步 backend transport contract。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3b5070b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

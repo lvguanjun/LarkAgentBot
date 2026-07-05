@@ -280,3 +280,36 @@ Implemented low-risk Lark Agent management commands: /help, /config, /skill list
 ### Next Steps
 
 - None - task complete
+
+
+## Session 8: Pydantic settings app config
+
+**Date**: 2026-07-05
+**Task**: Pydantic settings app config
+**Branch**: `master`
+
+### Summary
+
+Replaced application config.yaml loading with pydantic-settings environment/.env configuration using LARK_AGENT_ prefix and double-underscore nesting, removed --config, added .env.example, updated README/tests/backend spec, and archived the task.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c670db6` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

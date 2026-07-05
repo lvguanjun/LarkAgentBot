@@ -94,8 +94,7 @@ class LarkWebSocketBotRunner:
                 )
                 return
 
-            loop = asyncio.get_running_loop()
-            task = loop.create_task(self.app.handle_message(message))
+            task = asyncio.create_task(self.app.handle_message(message))
             self._tasks.add(task)
             task.add_done_callback(self._on_task_done)
         except Exception:

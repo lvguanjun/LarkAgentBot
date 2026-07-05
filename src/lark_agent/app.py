@@ -5,9 +5,10 @@ from typing import Any
 
 from lark_agent.config import AppConfig
 from lark_agent.llm_client import LLMClient
+from lark_agent.mcp_manager import MCPConfig, MCPManager
 from lark_agent.project import ProjectStore
 from lark_agent.router import MessageRouter
-from lark_agent.tools import BuiltinTools
+from lark_agent.tools import BuiltinTools, ToolDispatcher
 from lark_agent.transport.base import IncomingMessage, MessageSender
 
 
@@ -23,6 +24,7 @@ class BotApp:
         llm_client: LLMClient,
         router: MessageRouter | None = None,
         project_store: ProjectStore | None = None,
+        mcp_manager_factory: Any | None = None,
     ) -> None:
         self.config = config
         self.sender = sender
@@ -32,6 +34,7 @@ class BotApp:
             config.data_dir,
             max_messages=config.conversation.max_messages,
         )
+        self.mcp_manager_factory = mcp_manager_factory or (lambda mcp_config: MCPManager(mcp_config))
 
     async def handle_message(self, message: IncomingMessage) -> str | None:
         if not self.router.should_respond(message):
@@ -44,7 +47,7 @@ class BotApp:
         conversation = project.get_conversation(thread_id)
         skills_registry = project.get_skills_registry()
         builtin_tools = BuiltinTools(skills_registry)
-        tools = builtin_tools.get_tools_for_llm()
+        mcp_manager = self._create_mcp_manager(project.get_mcp_config())
 
         conversation.append(message.to_openai_message())
         system_prompt = _build_system_prompt(
@@ -53,34 +56,43 @@ class BotApp:
         )
         reply = ""
 
-        for _ in range(MAX_TOOL_ITERATIONS):
-            assistant_message = await self.llm_client.complete_message(
-                system_prompt,
-                conversation.get_context(),
-                tools=tools,
-            )
-            tool_calls = assistant_message.get("tool_calls") or []
-            if not tool_calls:
-                reply = _message_text(assistant_message)
-                conversation.append({"role": "assistant", "content": reply})
-                break
+        try:
+            if mcp_manager is not None:
+                await mcp_manager.start()
+            tool_dispatcher = ToolDispatcher(builtin_tools, mcp_manager)
+            tools = tool_dispatcher.get_tools_for_llm()
 
-            conversation.append(assistant_message)
-            for tool_call in tool_calls:
-                result = await builtin_tools.call_tool(
-                    _tool_call_name(tool_call),
-                    _tool_call_arguments(tool_call),
+            for _ in range(MAX_TOOL_ITERATIONS):
+                assistant_message = await self.llm_client.complete_message(
+                    system_prompt,
+                    conversation.get_context(),
+                    tools=tools,
                 )
-                conversation.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": _tool_call_id(tool_call),
-                        "content": result,
-                    }
-                )
-        else:
-            reply = "Error: tool loop exceeded maximum iterations"
-            conversation.append({"role": "assistant", "content": reply})
+                tool_calls = assistant_message.get("tool_calls") or []
+                if not tool_calls:
+                    reply = _message_text(assistant_message)
+                    conversation.append({"role": "assistant", "content": reply})
+                    break
+
+                conversation.append(assistant_message)
+                for tool_call in tool_calls:
+                    result = await tool_dispatcher.call_tool(
+                        _tool_call_name(tool_call),
+                        _tool_call_arguments(tool_call),
+                    )
+                    conversation.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": _tool_call_id(tool_call),
+                            "content": result,
+                        }
+                    )
+            else:
+                reply = "Error: tool loop exceeded maximum iterations"
+                conversation.append({"role": "assistant", "content": reply})
+        finally:
+            if mcp_manager is not None:
+                await mcp_manager.shutdown()
 
         await self.sender.send_text(
             message.chat_id,
@@ -93,6 +105,11 @@ class BotApp:
             self.router.mark_thread_activated(message.chat_id, message.root_id)
 
         return reply
+
+    def _create_mcp_manager(self, mcp_config: MCPConfig) -> Any | None:
+        if mcp_config.is_empty:
+            return None
+        return self.mcp_manager_factory(mcp_config)
 
 
 def _build_system_prompt(agents_md: str, skills_fragment: str) -> str:

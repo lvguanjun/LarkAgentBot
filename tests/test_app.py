@@ -4,6 +4,7 @@ from typing import Any
 from lark_agent.app import BotApp
 from lark_agent.config import AppConfig, ConversationConfig, LLMConfig, LarkConfig
 from lark_agent.llm_client import LLMClient
+from lark_agent.mcp_manager import MCPConfig, MCPServerConfig
 from lark_agent.transport.base import ImagePart, IncomingMessage, TextPart
 
 
@@ -55,6 +56,39 @@ class FakeSender:
         )
 
 
+class FakeMCPManager:
+    def __init__(self, config: MCPConfig, *, fail: bool = False) -> None:
+        self.config = config
+        self.fail = fail
+        self.started = False
+        self.shutdown_called = False
+        self.calls: list[tuple[str, dict[str, Any]]] = []
+
+    async def start(self) -> None:
+        self.started = True
+
+    def get_tools_for_llm(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": "mcp__demo__lookup",
+                    "description": "Lookup value",
+                    "parameters": {"type": "object", "properties": {"query": {"type": "string"}}},
+                },
+            }
+        ]
+
+    async def call_tool(self, name: str, args: dict[str, Any]) -> str:
+        self.calls.append((name, args))
+        if self.fail:
+            return "Error: MCP tool failed"
+        return f"MCP result for {args['query']}"
+
+    async def shutdown(self) -> None:
+        self.shutdown_called = True
+
+
 def make_config(tmp_path: Path) -> AppConfig:
     return AppConfig(
         data_dir=tmp_path,
@@ -76,6 +110,10 @@ def write_skill(root: Path, dirname: str, *, name: str, description: str, body: 
 
 def skills_root(project_root: Path) -> Path:
     return project_root / ".agents" / "skills"
+
+
+def mcp_config_root(project_root: Path) -> Path:
+    return project_root / ".agents"
 
 
 async def test_app_handles_text_message_end_to_end(tmp_path: Path) -> None:
@@ -276,3 +314,142 @@ async def test_app_runs_read_skill_tool_loop_and_persists_full_chain(tmp_path: P
         ),
         '{"role": "assistant", "content": "I loaded the writer skill."}',
     ]
+
+
+async def test_app_runs_mcp_tool_loop_and_persists_full_chain(tmp_path: Path) -> None:
+    defaults = tmp_path / "defaults"
+    defaults.mkdir()
+    (defaults / "AGENTS.md").write_text("system prompt", encoding="utf-8")
+    mcp_dir = mcp_config_root(defaults)
+    mcp_dir.mkdir()
+    (mcp_dir / "mcp.yaml").write_text(
+        """
+mcpServers:
+  demo:
+    command: python
+""",
+        encoding="utf-8",
+    )
+    fake_llm = FakeToolLLM(
+        [
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call-mcp-1",
+                        "type": "function",
+                        "function": {"name": "mcp__demo__lookup", "arguments": '{"query": "alpha"}'},
+                    }
+                ],
+            },
+            {"role": "assistant", "content": "MCP final answer"},
+        ]
+    )
+    sender = FakeSender()
+    managers: list[FakeMCPManager] = []
+
+    def make_manager(config: MCPConfig) -> FakeMCPManager:
+        manager = FakeMCPManager(config)
+        managers.append(manager)
+        return manager
+
+    app = BotApp(
+        make_config(tmp_path),
+        sender=sender,
+        llm_client=LLMClient(LLMConfig(model="fake"), client=fake_llm),
+        mcp_manager_factory=make_manager,
+    )
+    message = IncomingMessage(
+        message_id="msg-1",
+        chat_id="chat-1",
+        chat_type="p2p",
+        sender_id="user-1",
+        content=[TextPart("use mcp")],
+    )
+
+    reply = await app.handle_message(message)
+
+    assert reply == "MCP final answer"
+    assert len(managers) == 1
+    assert managers[0].config.servers == {"demo": MCPServerConfig(name="demo", command="python")}
+    assert managers[0].started is True
+    assert managers[0].shutdown_called is True
+    assert managers[0].calls == [("mcp__demo__lookup", {"query": "alpha"})]
+    assert fake_llm.calls[0][2] == [
+        {
+            "type": "function",
+            "function": {
+                "name": "mcp__demo__lookup",
+                "description": "Lookup value",
+                "parameters": {"type": "object", "properties": {"query": {"type": "string"}}},
+            },
+        }
+    ]
+    history_path = tmp_path / "groups" / "chat-1" / "conversations" / "chat-1" / "history.jsonl"
+    assert history_path.read_text(encoding="utf-8").splitlines() == [
+        '{"role": "user", "content": "use mcp"}',
+        (
+            '{"role": "assistant", "content": null, "tool_calls": '
+            '[{"id": "call-mcp-1", "type": "function", "function": '
+            '{"name": "mcp__demo__lookup", "arguments": "{\\"query\\": \\"alpha\\"}"}}]}'
+        ),
+        '{"role": "tool", "tool_call_id": "call-mcp-1", "content": "MCP result for alpha"}',
+        '{"role": "assistant", "content": "MCP final answer"}',
+    ]
+
+
+async def test_app_writes_mcp_tool_error_as_tool_result(tmp_path: Path) -> None:
+    defaults = tmp_path / "defaults"
+    defaults.mkdir()
+    (defaults / "AGENTS.md").write_text("system prompt", encoding="utf-8")
+    mcp_dir = mcp_config_root(defaults)
+    mcp_dir.mkdir()
+    (mcp_dir / "mcp.yaml").write_text(
+        """
+mcpServers:
+  demo:
+    command: python
+""",
+        encoding="utf-8",
+    )
+    fake_llm = FakeToolLLM(
+        [
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call-mcp-1",
+                        "type": "function",
+                        "function": {"name": "mcp__demo__lookup", "arguments": '{"query": "alpha"}'},
+                    }
+                ],
+            },
+            {"role": "assistant", "content": "I saw the MCP error."},
+        ]
+    )
+    sender = FakeSender()
+
+    app = BotApp(
+        make_config(tmp_path),
+        sender=sender,
+        llm_client=LLMClient(LLMConfig(model="fake"), client=fake_llm),
+        mcp_manager_factory=lambda config: FakeMCPManager(config, fail=True),
+    )
+    message = IncomingMessage(
+        message_id="msg-1",
+        chat_id="chat-1",
+        chat_type="p2p",
+        sender_id="user-1",
+        content=[TextPart("use mcp")],
+    )
+
+    reply = await app.handle_message(message)
+
+    assert reply == "I saw the MCP error."
+    assert fake_llm.calls[1][1][-1] == {
+        "role": "tool",
+        "tool_call_id": "call-mcp-1",
+        "content": "Error: MCP tool failed",
+    }

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from lark_agent.agents_conf import AgentsConf
 from lark_agent.conversation import Conversation
+from lark_agent.mcp_manager import MCPConfig, load_mcp_config
 from lark_agent.skills import SkillsRegistry
 
 
@@ -36,6 +37,9 @@ class Project:
 
     def get_skills_registry(self) -> SkillsRegistry:
         return SkillsRegistry.discover(self.defaults_dir, self.path)
+
+    def get_mcp_config(self) -> MCPConfig:
+        return load_mcp_config(self.defaults_dir, self.path)
 
     def get_conversation(self, thread_id: str) -> Conversation:
         safe_thread_id = _safe_path_name(thread_id, "thread_id")

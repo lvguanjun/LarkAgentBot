@@ -1,9 +1,15 @@
 from __future__ import annotations
 
 import inspect
-from typing import Any
+from typing import Any, Protocol
 
 from lark_agent.skills import SkillsRegistry
+
+
+class ToolProvider(Protocol):
+    def get_tools_for_llm(self) -> list[dict[str, Any]]: ...
+
+    async def call_tool(self, name: str, args: dict[str, Any]) -> str: ...
 
 
 class BuiltinTools:
@@ -56,3 +62,22 @@ class BuiltinTools:
         if inspect.isawaitable(result):
             result = await result
         return str(result)
+
+
+class ToolDispatcher:
+    def __init__(self, builtin_tools: BuiltinTools, mcp_tools: ToolProvider | None = None) -> None:
+        self.builtin_tools = builtin_tools
+        self.mcp_tools = mcp_tools
+
+    def get_tools_for_llm(self) -> list[dict[str, Any]]:
+        tools = self.builtin_tools.get_tools_for_llm()
+        if self.mcp_tools is not None:
+            tools.extend(self.mcp_tools.get_tools_for_llm())
+        return tools
+
+    async def call_tool(self, name: str, args: dict[str, Any]) -> str:
+        if name == "read_skill":
+            return await self.builtin_tools.call_tool(name, args)
+        if name.startswith("mcp__") and self.mcp_tools is not None:
+            return await self.mcp_tools.call_tool(name, args)
+        return f"Error: unknown tool {name!r}"

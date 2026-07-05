@@ -213,3 +213,37 @@ Moved runtime defaults out of tracked data into templates/defaults, ignored loca
 ### Next Steps
 
 - None - task complete
+
+
+## Session 6: Feishu websocket transport
+
+**Date**: 2026-07-05
+**Task**: Feishu websocket transport
+**Branch**: `master`
+
+### Summary
+
+Implemented the Feishu WebSocket transport slice: event conversion for text/post/image, Feishu reply/create sender, ack-first runner with TTL dedupe and background error logging, minimal python -m lark_agent.main startup, README live-bot notes, focused tests, and backend transport contract spec.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `34e4492` | (see git log) |
+| `e9c5bf0` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

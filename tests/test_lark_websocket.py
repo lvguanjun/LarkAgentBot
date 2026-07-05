@@ -11,7 +11,20 @@ import pytest
 from lark_agent.config import AppConfig, ConversationConfig, LLMConfig, LarkConfig
 from lark_agent.main import build_runner, configure_logging, validate_lark_config
 from lark_agent.transport.lark.bot_info import LarkBotInfo
-from lark_agent.transport.base import ImagePart, TextPart
+from lark_agent.transport.base import (
+    CodeBlockPart,
+    DividerPart,
+    EmojiPart,
+    FilePart,
+    ImagePart,
+    LinkPart,
+    LocationPart,
+    MediaPart,
+    MentionPart,
+    StickerPart,
+    SummaryPart,
+    TextPart,
+)
 from lark_agent.transport.lark import (
     LarkMessageEventAdapter,
     LarkMessageSender,
@@ -169,7 +182,76 @@ def test_adapter_converts_post_message_in_order() -> None:
     assert message.content == [
         TextPart("look "),
         ImagePart(file_key="img-1"),
-        TextPart("link"),
+        LinkPart(text="link", href="https://example.test"),
+    ]
+
+
+def test_adapter_converts_post_at_message_as_mention_part() -> None:
+    event = make_event(
+        message_type="post",
+        content={
+            "title": "",
+            "content": [
+                [
+                    {"tag": "at", "user_id": "@_user_1", "user_name": "MiMi", "style": []},
+                    {"tag": "text", "text": " ", "style": []},
+                ],
+                [
+                    {
+                        "tag": "img",
+                        "image_key": "img_v3_0213a_c735dceb-f258-46be-8502-44ffdb0333hu",
+                        "width": 1324,
+                        "height": 1420,
+                    }
+                ],
+                [
+                    {"tag": "text", "text": "这张图说了啥，", "style": []},
+                    {"tag": "emotion", "emoji_type": "Lark_Emoji_Glance_0"},
+                ],
+            ],
+        },
+    )
+
+    message = LarkMessageEventAdapter().to_incoming_message(event)
+
+    assert message is not None
+    assert message.content == [
+        MentionPart(user_id="@_user_1", user_name="MiMi"),
+        TextPart(" "),
+        TextPart("\n"),
+        ImagePart(file_key="img_v3_0213a_c735dceb-f258-46be-8502-44ffdb0333hu"),
+        TextPart("\n"),
+        TextPart("这张图说了啥，"),
+        EmojiPart(emoji_type="Lark_Emoji_Glance_0"),
+    ]
+
+
+def test_adapter_converts_post_extended_tags() -> None:
+    event = make_event(
+        message_type="post",
+        content={
+            "title": "",
+            "content": [
+                [
+                    {"tag": "media", "file_key": "file-video", "image_key": "img-cover"},
+                    {"tag": "emotion", "emoji_type": "SMILE"},
+                ],
+                [{"tag": "hr"}],
+                [{"tag": "code_block", "language": "GO", "text": "func main() {}"}],
+            ],
+        },
+    )
+
+    message = LarkMessageEventAdapter().to_incoming_message(event)
+
+    assert message is not None
+    assert message.content == [
+        MediaPart(file_key="file-video", image_key="img-cover", kind="media"),
+        EmojiPart(emoji_type="SMILE"),
+        TextPart("\n"),
+        DividerPart(),
+        TextPart("\n"),
+        CodeBlockPart(language="GO", text="func main() {}"),
     ]
 
 
@@ -186,7 +268,217 @@ def test_adapter_ignores_unknown_chat_type_and_message_type() -> None:
     adapter = LarkMessageEventAdapter()
 
     assert adapter.to_incoming_message(make_event(chat_type="unknown")) is None
-    assert adapter.to_incoming_message(make_event(message_type="audio", content={"file_key": "f"})) is None
+    assert adapter.to_incoming_message(make_event(message_type="unknown", content={"file_key": "f"})) is None
+
+
+@pytest.mark.parametrize(
+    ("message_type", "content", "expected"),
+    [
+        (
+            "file",
+            {"file_key": "file-1", "file_name": "test.txt"},
+            [FilePart(file_key="file-1", file_name="test.txt", kind="file")],
+        ),
+        (
+            "folder",
+            {"file_key": "folder-1", "file_name": "docs"},
+            [FilePart(file_key="folder-1", file_name="docs", kind="folder")],
+        ),
+        (
+            "audio",
+            {"file_key": "audio-1", "duration": 2000},
+            [MediaPart(file_key="audio-1", duration=2000, kind="audio")],
+        ),
+        (
+            "media",
+            {
+                "file_key": "video-1",
+                "image_key": "cover-1",
+                "file_name": "clip.mp4",
+                "duration": 3000,
+            },
+            [
+                MediaPart(
+                    file_key="video-1",
+                    image_key="cover-1",
+                    file_name="clip.mp4",
+                    duration=3000,
+                    kind="media",
+                )
+            ],
+        ),
+        (
+            "sticker",
+            {"file_key": "sticker-1"},
+            [StickerPart(file_key="sticker-1")],
+        ),
+    ],
+)
+def test_adapter_converts_attachment_messages(
+    message_type: str,
+    content: dict[str, Any],
+    expected: list[Any],
+) -> None:
+    event = make_event(message_type=message_type, content=content)
+
+    message = LarkMessageEventAdapter().to_incoming_message(event)
+
+    assert message is not None
+    assert message.content == expected
+
+
+def test_adapter_summarizes_known_attachment_with_missing_key() -> None:
+    event = make_event(message_type="file", content={"file_name": "missing-key.txt"})
+
+    message = LarkMessageEventAdapter().to_incoming_message(event)
+
+    assert message is not None
+    assert message.content == [
+        SummaryPart(kind="file", fields={"file_name": "missing-key.txt"}),
+    ]
+
+
+def test_adapter_converts_interactive_card_elements() -> None:
+    event = make_event(
+        message_type="interactive",
+        content={
+            "title": "卡片标题",
+            "elements": [
+                [{"tag": "button", "text": "主按钮", "type": "primary"}],
+                [
+                    {"tag": "a", "href": "https://www.feishu.cn", "text": "飞书"},
+                    {"tag": "text", "text": "正文"},
+                    {"tag": "img", "image_key": "img-card"},
+                ],
+                [
+                    {
+                        "tag": "select_static",
+                        "options": ["选项1", "选项2"],
+                        "placeholder": "默认提示文本",
+                    }
+                ],
+            ],
+        },
+    )
+
+    message = LarkMessageEventAdapter().to_incoming_message(event)
+
+    assert message is not None
+    assert message.content == [
+        TextPart("卡片标题"),
+        TextPart("\n"),
+        SummaryPart(kind="button", title="主按钮", fields={"type": "primary"}),
+        TextPart("\n"),
+        LinkPart(text="飞书", href="https://www.feishu.cn"),
+        TextPart("正文"),
+        ImagePart(file_key="img-card"),
+        TextPart("\n"),
+        SummaryPart(
+            kind="select_static",
+            title="默认提示文本",
+            fields={"options": "选项1, 选项2", "placeholder": "默认提示文本"},
+        ),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("message_type", "content", "expected"),
+    [
+        (
+            "share_calendar_event",
+            {"summary": "日程分享测试", "start_time": "1", "end_time": "2"},
+            SummaryPart(
+                kind="share_calendar_event",
+                title="日程分享测试",
+                fields={"summary": "日程分享测试", "start_time": "1", "end_time": "2"},
+            ),
+        ),
+        ("share_chat", {"chat_id": "oc_1"}, SummaryPart(kind="share_chat", fields={"chat_id": "oc_1"})),
+        (
+            "share_user",
+            {"user_id": "ou_1"},
+            SummaryPart(kind="share_user", fields={"user_id": "ou_1"}),
+        ),
+        (
+            "system",
+            {
+                "template": "{from_user} invited {to_chatters} to this chat.",
+                "from_user": ["botName"],
+                "to_chatters": ["小明", "小王"],
+            },
+            SummaryPart(
+                kind="system",
+                title="botName invited 小明, 小王 to this chat.",
+                fields={"from_user": "botName", "to_chatters": "小明, 小王"},
+            ),
+        ),
+        (
+            "video_chat",
+            {"topic": "视频通话消息", "start_time": "1623124523829"},
+            SummaryPart(
+                kind="video_chat",
+                title="视频通话消息",
+                fields={"topic": "视频通话消息", "start_time": "1623124523829"},
+            ),
+        ),
+        (
+            "todo",
+            {
+                "task_id": "task-1",
+                "summary": {"title": "", "content": [[{"tag": "text", "text": "任务标题"}]]},
+                "due_time": "1623124318000",
+            },
+            SummaryPart(
+                kind="todo",
+                title="任务标题",
+                fields={"task_id": "task-1", "due_time": "1623124318000"},
+            ),
+        ),
+        (
+            "vote",
+            {"topic": "投票测试", "options": ["选项1", "选项2"]},
+            SummaryPart(
+                kind="vote",
+                title="投票测试",
+                fields={"topic": "投票测试", "options": "选项1, 选项2"},
+            ),
+        ),
+        (
+            "merge_forward",
+            {"content": "Merged and Forwarded Message"},
+            SummaryPart(
+                kind="merge_forward",
+                title="Merged and Forwarded Message",
+                fields={"content": "Merged and Forwarded Message"},
+            ),
+        ),
+    ],
+)
+def test_adapter_converts_business_message_summaries(
+    message_type: str,
+    content: dict[str, Any],
+    expected: SummaryPart,
+) -> None:
+    event = make_event(message_type=message_type, content=content)
+
+    message = LarkMessageEventAdapter().to_incoming_message(event)
+
+    assert message is not None
+    assert message.content == [expected]
+
+
+def test_adapter_converts_location_message() -> None:
+    event = make_event(
+        message_type="location",
+        content={"name": "上海市", "longitude": "121.4737", "latitude": "31.2304"},
+    )
+
+    message = LarkMessageEventAdapter().to_incoming_message(event)
+
+    assert message is not None
+    assert message.content == [
+        LocationPart(name="上海市", longitude="121.4737", latitude="31.2304")
+    ]
 
 
 def test_adapter_dedupe_key_prefers_event_id_then_message_id() -> None:
@@ -251,6 +543,34 @@ async def test_runner_schedules_background_task_and_dedupes() -> None:
     assert len(app.messages) == 1
     app.release.set()
     await asyncio.sleep(0)
+
+
+async def test_runner_logs_bounded_raw_and_normalized_content(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    app = FakeBotApp()
+    runner = LarkWebSocketBotRunner(
+        app_id="app",
+        app_secret="secret",
+        app=app,  # type: ignore[arg-type]
+    )
+    long_text = "x" * 3000
+
+    with caplog.at_level(logging.INFO, logger="lark_agent.transport.lark.runner"):
+        runner.handle_event(make_event(content={"text": long_text}))
+
+    await asyncio.wait_for(app.started.wait(), timeout=1)
+    app.release.set()
+    await asyncio.sleep(0)
+
+    assert "Received Feishu message event:" in caplog.text
+    assert "content_preview=" in caplog.text
+    assert "Normalized Feishu message event:" in caplog.text
+    assert "raw_content_preview=" in caplog.text
+    assert "normalized_parts_preview=" in caplog.text
+    assert "text_projection_preview=" in caplog.text
+    assert "[truncated " in caplog.text
+    assert long_text not in caplog.text
 
 
 async def test_runner_skips_event_without_stable_dedupe_key() -> None:

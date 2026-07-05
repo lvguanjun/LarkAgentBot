@@ -20,7 +20,97 @@ class ImagePart:
     type: Literal["image"] = "image"
 
 
-ContentPart: TypeAlias = TextPart | ImagePart
+@dataclass(frozen=True)
+class MentionPart:
+    user_id: str
+    user_name: str = ""
+    type: Literal["mention"] = "mention"
+
+    @property
+    def display_text(self) -> str:
+        return self.user_name or self.user_id
+
+
+@dataclass(frozen=True)
+class FilePart:
+    file_key: str
+    file_name: str = ""
+    kind: Literal["file", "folder"] = "file"
+    type: Literal["file"] = "file"
+
+
+@dataclass(frozen=True)
+class MediaPart:
+    file_key: str
+    image_key: str = ""
+    file_name: str = ""
+    duration: int | None = None
+    kind: Literal["audio", "media"] = "media"
+    type: Literal["media"] = "media"
+
+
+@dataclass(frozen=True)
+class StickerPart:
+    file_key: str
+    type: Literal["sticker"] = "sticker"
+
+
+@dataclass(frozen=True)
+class LinkPart:
+    text: str
+    href: str = ""
+    type: Literal["link"] = "link"
+
+
+@dataclass(frozen=True)
+class CodeBlockPart:
+    language: str
+    text: str
+    type: Literal["code_block"] = "code_block"
+
+
+@dataclass(frozen=True)
+class DividerPart:
+    text: str = "---"
+    type: Literal["divider"] = "divider"
+
+
+@dataclass(frozen=True)
+class EmojiPart:
+    emoji_type: str
+    type: Literal["emoji"] = "emoji"
+
+
+@dataclass(frozen=True)
+class LocationPart:
+    name: str = ""
+    longitude: str = ""
+    latitude: str = ""
+    type: Literal["location"] = "location"
+
+
+@dataclass(frozen=True)
+class SummaryPart:
+    kind: str
+    title: str = ""
+    fields: dict[str, str] = field(default_factory=dict)
+    type: Literal["summary"] = "summary"
+
+
+ContentPart: TypeAlias = (
+    TextPart
+    | ImagePart
+    | MentionPart
+    | FilePart
+    | MediaPart
+    | StickerPart
+    | LinkPart
+    | CodeBlockPart
+    | DividerPart
+    | EmojiPart
+    | LocationPart
+    | SummaryPart
+)
 
 
 @dataclass(frozen=True)
@@ -35,16 +125,63 @@ class IncomingMessage:
     raw_event: Any = None
 
     def text_content(self) -> str:
-        parts: list[str] = []
-        for part in self.content:
-            if isinstance(part, TextPart):
-                parts.append(part.text)
-            else:
-                parts.append(part.alt_text)
-        return "".join(parts).strip()
+        return "".join(content_part_text(part) for part in self.content).strip()
 
     def to_openai_message(self) -> dict[str, str]:
         return {"role": "user", "content": self.text_content()}
+
+
+def content_part_text(part: ContentPart) -> str:
+    if isinstance(part, TextPart):
+        return part.text
+    if isinstance(part, MentionPart):
+        return part.display_text
+    if isinstance(part, ImagePart):
+        return part.alt_text
+    if isinstance(part, FilePart):
+        label = "文件夹" if part.kind == "folder" else "文件"
+        fields = _projection_fields((("name", part.file_name), ("file_key", part.file_key)))
+        return f"[用户发送了一个{label}{fields}]"
+    if isinstance(part, MediaPart):
+        label = "音频" if part.kind == "audio" else "视频"
+        fields = _projection_fields(
+            (
+                ("name", part.file_name),
+                ("duration", f"{part.duration}ms" if part.duration is not None else ""),
+                ("file_key", part.file_key),
+                ("image_key", part.image_key),
+            )
+        )
+        return f"[用户发送了一段{label}{fields}]"
+    if isinstance(part, StickerPart):
+        fields = _projection_fields((("file_key", part.file_key),))
+        return f"[用户发送了一个表情包{fields}]"
+    if isinstance(part, LinkPart):
+        if part.text and part.href:
+            return f"{part.text} ({part.href})"
+        return part.text or part.href
+    if isinstance(part, CodeBlockPart):
+        language = f" {part.language}" if part.language else ""
+        return f"\n[代码块{language}]\n{part.text}\n"
+    if isinstance(part, DividerPart):
+        return f"\n{part.text}\n"
+    if isinstance(part, EmojiPart):
+        return f"[表情: {part.emoji_type}]"
+    if isinstance(part, LocationPart):
+        fields = _projection_fields(
+            (("name", part.name), ("longitude", part.longitude), ("latitude", part.latitude))
+        )
+        return f"[位置{fields}]"
+    if isinstance(part, SummaryPart):
+        title = f": {part.title}" if part.title else ""
+        fields = _projection_fields(part.fields.items())
+        return f"[{part.kind}{title}{fields}]"
+    return ""
+
+
+def _projection_fields(fields: Any) -> str:
+    values = [f"{key}={value}" for key, value in fields if value != ""]
+    return f": {', '.join(values)}" if values else ""
 
 
 class MessageSender(Protocol):

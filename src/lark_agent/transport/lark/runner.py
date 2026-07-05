@@ -1,17 +1,21 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from collections.abc import Callable
+from dataclasses import asdict, is_dataclass
 from typing import Any
 
 import lark_oapi as lark
 
 from lark_agent.app import BotApp
+from lark_agent.transport.base import IncomingMessage
 from lark_agent.transport.lark.adapter import LarkMessageEventAdapter
 from lark_agent.transport.lark.dedupe import TTLSeenCache
 
 logger = logging.getLogger(__name__)
+LOG_PREVIEW_LIMIT = 2048
 
 
 class LarkWebSocketBotRunner:
@@ -92,6 +96,10 @@ class LarkWebSocketBotRunner:
                     _format_event_log_fields(event),
                 )
                 return
+            logger.info(
+                "Normalized Feishu message event: %s",
+                _format_normalized_message_log_fields(event, message),
+            )
 
             loop = asyncio.get_running_loop()
             task = loop.create_task(self.app.handle_message(message))
@@ -127,9 +135,47 @@ def _format_event_log_fields(event: Any) -> str:
         "chat_id": _string_attr(message, "chat_id") or _string_attr(data, "chat_id"),
         "sender_id": _id_fields(getattr(getattr(data, "sender", None), "sender_id", None)),
         "operator_id": _id_fields(getattr(data, "operator_id", None)),
-        "content": _string_attr(message, "content"),
+        "content_preview": _preview(_string_attr(message, "content")),
     }
     return " ".join(f"{name}={value}" for name, value in fields.items() if value)
+
+
+def _format_normalized_message_log_fields(event: Any, message: IncomingMessage) -> str:
+    data = getattr(event, "event", None)
+    raw_message = getattr(data, "message", None)
+    fields = {
+        "message_id": message.message_id,
+        "chat_id": message.chat_id,
+        "message_type": _string_attr(raw_message, "message_type"),
+        "raw_content_preview": _preview(_string_attr(raw_message, "content")),
+        "normalized_parts_preview": _preview(_json_preview_value(_content_parts_for_log(message))),
+        "text_projection_preview": _preview(message.text_content()),
+    }
+    return " ".join(f"{name}={value}" for name, value in fields.items() if value)
+
+
+def _content_parts_for_log(message: IncomingMessage) -> list[dict[str, Any]]:
+    parts: list[dict[str, Any]] = []
+    for part in message.content:
+        if is_dataclass(part):
+            value = asdict(part)
+        else:
+            value = {"repr": repr(part)}
+        parts.append({key: _preview(value) if isinstance(value, str) else value for key, value in value.items()})
+    return parts
+
+
+def _json_preview_value(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True)
+
+
+def _preview(value: str) -> str:
+    if not value:
+        return ""
+    if len(value) <= LOG_PREVIEW_LIMIT:
+        return value
+    omitted = len(value) - LOG_PREVIEW_LIMIT
+    return f"{value[:LOG_PREVIEW_LIMIT]}...[truncated {omitted} chars]"
 
 
 def _string_attr(obj: Any, name: str) -> str:

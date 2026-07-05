@@ -117,10 +117,16 @@ empty data directories, and runner startup without a configured bot ID.
   constructing `BotApp`.
 - Bot info requests use tenant access tokens and must require a successful
   response with non-empty `bot.open_id`.
-- Feishu/Lark text, post, and image events normalize to `IncomingMessage`
-  content using `TextPart` and `ImagePart`.
+- Feishu/Lark receiving events normalize known message types to
+  SDK-independent `IncomingMessage.content` parts in `transport/base.py`.
+  `text`, `post`, `image`, `file`, `folder`, `audio`, `media`, `sticker`,
+  `interactive`, `hongbao`, calendar cards, share cards, system messages,
+  locations, video chats, todos, votes, and merge-forward messages must produce
+  either structured parts or a stable readable `SummaryPart`.
 - Unsupported message types and unknown chat types return `None` from the
-  adapter; they should not reach `BotApp`.
+  adapter; they should not reach `BotApp`. Known message types should not be
+  dropped merely because the adapter cannot fetch attachment or business-card
+  details.
 - Dedupe keys prefer event header `event_id`, then event `uuid`, then
   `message.message_id`. Events without a stable key are acknowledged but not
   handed to `BotApp`.
@@ -130,6 +136,106 @@ empty data directories, and runner startup without a configured bot ID.
   as background work. Do not block callbacks on LLM or tool execution.
 - Background `BotApp.handle_message` failures are logged in task callbacks and
   must not propagate into the SDK event callback.
+- Runner event logs that include Feishu `message.content` or normalized message
+  projections must use bounded previews. Do not log raw content, normalized
+  part JSON, or text projections without a hard length cap.
+
+### Scenario: Feishu/Lark Leading Bot Mention Normalization
+
+#### 1. Scope / Trigger
+
+- Trigger: Feishu/Lark group messages can encode the same visible bot mention
+  as text content (`@_user_1 /help`) or rich-text post content (`tag: "at"`).
+- Scope: Transport adapters preserve mention structure; router/app code owns
+  command and LLM text normalization.
+
+#### 2. Signatures
+
+- `IncomingMessage.content` may contain text, link, mention, image, file,
+  media, sticker, emoji, divider, code block, location, and summary parts.
+- `MessageRouter.normalized_text_content(message: IncomingMessage) -> str`
+  is the canonical text projection for command parsing and LLM user messages.
+
+#### 3. Contracts
+
+- Text messages keep Feishu placeholder tokens such as `@_user_1` in
+  `TextPart.text`.
+- Post `tag: "at"` nodes normalize to `MentionPart(user_id, user_name)`, not
+  plain text.
+- Post and interactive card elements preserve readable order. Links, media,
+  emoji, dividers, code blocks, controls, and nested notes must normalize to
+  shared content parts instead of being silently discarded.
+- Attachment parts store only Feishu-provided keys, names, duration, and cover
+  image metadata. They do not imply that the bot has downloaded, OCR'd, or
+  transcribed the attachment.
+- Group messages strip only leading bot-mention prefixes after
+  `is_bot_mentioned(message)` is true. Private chats keep raw text content.
+- Default `IncomingMessage.text_content()` projection is owned by
+  `transport/base.py`; router code may strip leading bot mentions but must not
+  reimplement per-message-type Feishu semantics.
+- After adapter normalization succeeds, runner logs one `INFO` comparison entry
+  with `message_id`, `chat_id`, `message_type`, bounded `raw_content_preview`,
+  bounded `normalized_parts_preview`, and bounded `text_projection_preview`.
+  The pre-normalization "received event" log must also use a bounded
+  `content_preview`.
+
+#### 4. Validation & Error Matrix
+
+- Unknown message type -> adapter returns `None`.
+- Invalid content JSON -> adapter returns `None` and logs a warning.
+- Known attachment/business message with no downloadable content -> adapter
+  returns structured metadata or `SummaryPart` instead of pretending content
+  was read.
+- Long raw content, normalized parts, or projections -> log only the configured
+  preview prefix and append a truncation marker. This protects logs if future
+  Feishu payloads include base64, very large card JSON, or long text.
+- Group message without a bot mention -> router must not strip leading mention
+  placeholders and must not treat `/command` as actionable.
+
+#### 5. Good/Base/Bad Cases
+
+- Good: `@_user_1 /help` in a mentioned group chat normalizes to `/help`.
+- Good: `MentionPart("@_user_1", "Bot") + ImagePart + TextPart("这张图说了啥")`
+  normalizes to `[用户发送了一张图片]这张图说了啥`.
+- Good: a Feishu `file` message becomes `FilePart(file_key, file_name)` and
+  projects to a readable placeholder containing those metadata fields.
+- Good: an interactive card button or selector becomes a `SummaryPart` in card
+  order, while card text, links, and images use their structured parts.
+- Base: `/help` in a private chat remains `/help`.
+- Bad: Converting post `at` nodes to `TextPart("Bot")` prevents command and LLM
+  normalization from reliably removing the leading mention.
+- Bad: Returning `None` for known `audio`, `media`, `file`, calendar, vote, or
+  location messages makes real conversations disappear at the adapter boundary.
+- Bad: Logging `message.content` directly can flood logs with large payloads and
+  makes normalized comparison logging unsafe to enable at `INFO`.
+
+#### 6. Tests Required
+
+- Router tests must cover command detection with a leading `@_user_N` text
+  placeholder.
+- Adapter tests must cover post `tag: "at"` conversion to `MentionPart` plus
+  representative post tags, attachments, interactive cards, and business
+  summary message types.
+- App tests must prove normalized group text, including image alt text, is what
+  reaches the LLM history.
+- Runner tests must prove raw event content and normalized comparison logs are
+  emitted with bounded previews and truncation markers for oversized content.
+
+#### 7. Wrong vs Correct
+
+Wrong:
+
+```python
+# Loses mention structure and leaves "Bot /help" or "Bot question" in core text.
+parts.append(TextPart(node["user_name"]))
+```
+
+Correct:
+
+```python
+parts.append(MentionPart(user_id=node["user_id"], user_name=node["user_name"]))
+text = router.normalized_text_content(message)
+```
 
 Tests that modify live transport must cover pure event conversion, sender
 request fields, ack-first scheduling, TTL dedupe, missing-key skip, background

@@ -11,8 +11,15 @@ class ManagementCommandHandler:
     def __init__(self, config: AppConfig) -> None:
         self.config = config
 
-    def handle(self, message: IncomingMessage, project: Project, thread_id: str) -> str:
-        command, args = _parse_command(message.text_content())
+    def handle(
+        self,
+        message: IncomingMessage,
+        project: Project,
+        thread_id: str,
+        *,
+        text: str | None = None,
+    ) -> str:
+        command, args = _parse_command(text if text is not None else message.text_content())
 
         if command == "/help":
             return _help_text()

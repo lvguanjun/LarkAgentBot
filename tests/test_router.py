@@ -1,5 +1,5 @@
 from lark_agent.router import MAIN_THREAD_ID, MessageRouter
-from lark_agent.transport.base import ChatType, IncomingMessage, TextPart
+from lark_agent.transport.base import ChatType, ImagePart, IncomingMessage, MentionPart, TextPart
 
 
 def make_message(
@@ -55,3 +55,48 @@ def test_command_detection_respects_chat_type_rules() -> None:
     assert router.is_command(make_message(chat_type="p2p", text="/help")) is True
     assert router.is_command(make_message(text="/help", mentions=[])) is False
     assert router.is_command(make_message(text="/help", mentions=["bot-1"])) is True
+
+
+def test_group_command_detection_strips_leading_lark_mention_token() -> None:
+    router = MessageRouter("bot-1")
+    message = make_message(text="@_user_1 /help", mentions=["bot-1"])
+
+    assert router.is_command(message) is True
+    assert router.normalized_text_content(message) == "/help"
+
+
+def test_group_normalized_text_strips_leading_post_mention_before_image() -> None:
+    router = MessageRouter("bot-1")
+    message = IncomingMessage(
+        message_id="msg-1",
+        chat_id="chat-1",
+        chat_type="group",
+        sender_id="user-1",
+        mentions=["bot-1"],
+        content=[
+            MentionPart(user_id="@_user_1", user_name="MiMi"),
+            TextPart(" "),
+            ImagePart(file_key="img-1"),
+            TextPart("这张图说了啥，"),
+        ],
+    )
+
+    assert router.normalized_text_content(message) == "[用户发送了一张图片]这张图说了啥，"
+
+
+def test_group_normalized_text_keeps_middle_mention() -> None:
+    router = MessageRouter("bot-1")
+    message = IncomingMessage(
+        message_id="msg-1",
+        chat_id="chat-1",
+        chat_type="group",
+        sender_id="user-1",
+        mentions=["bot-1"],
+        content=[
+            TextPart("@_user_1 请问 "),
+            MentionPart(user_id="@_user_2", user_name="Alice"),
+            TextPart(" 怎么看？"),
+        ],
+    )
+
+    assert router.normalized_text_content(message) == "请问 Alice 怎么看？"

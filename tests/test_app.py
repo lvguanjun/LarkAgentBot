@@ -6,7 +6,7 @@ from lark_agent.config import AppConfig, ConversationConfig, LLMConfig, LarkConf
 from lark_agent.conversation import Conversation
 from lark_agent.llm_client import LLMClient
 from lark_agent.mcp import MCPConfig, MCPServerConfig
-from lark_agent.transport.base import ImagePart, IncomingMessage, TextPart
+from lark_agent.transport.base import EmojiPart, ImagePart, IncomingMessage, MentionPart, TextPart
 
 
 class FakeLLM:
@@ -236,7 +236,7 @@ async def test_group_management_command_requires_mention(tmp_path: Path) -> None
         chat_type="group",
         sender_id="user-1",
         mentions=["bot-1"],
-        content=[TextPart("/help")],
+        content=[TextPart("@_user_1 /help")],
     )
 
     assert await app.handle_message(unmentioned) is None
@@ -247,6 +247,47 @@ async def test_group_management_command_requires_mention(tmp_path: Path) -> None
     assert len(sender.sent) == 1
     assert sender.sent[0]["reply_to_message_id"] == "msg-2"
     assert fake_llm.calls == []
+
+
+async def test_app_strips_leading_group_post_mention_before_llm(tmp_path: Path) -> None:
+    defaults = tmp_path / "defaults"
+    defaults.mkdir()
+    (defaults / "AGENTS.md").write_text("system prompt", encoding="utf-8")
+    fake_llm = FakeLLM("assistant reply")
+    sender = FakeSender()
+    app = BotApp(
+        make_config(tmp_path),
+        sender=sender,
+        llm_client=LLMClient(LLMConfig(model="fake"), client=fake_llm),
+    )
+    message = IncomingMessage(
+        message_id="msg-1",
+        chat_id="chat-1",
+        chat_type="group",
+        sender_id="user-1",
+        mentions=["bot-1"],
+        content=[
+            MentionPart(user_id="@_user_1", user_name="MiMi"),
+            TextPart(" "),
+            ImagePart(file_key="img-1"),
+            TextPart("这张图说了啥，"),
+            EmojiPart(emoji_type="Lark_Emoji_Glance_0"),
+        ],
+    )
+
+    await app.handle_message(message)
+
+    assert fake_llm.calls == [
+        (
+            "system prompt",
+            [
+                {
+                    "role": "user",
+                    "content": "[用户发送了一张图片]这张图说了啥，[表情: Lark_Emoji_Glance_0]",
+                }
+            ],
+        ),
+    ]
 
 
 async def test_config_command_redacts_sensitive_values(tmp_path: Path) -> None:

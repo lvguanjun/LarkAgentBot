@@ -44,8 +44,9 @@ class BotApp:
 
         project = self.project_store.get_project(message.chat_id)
         thread_id = self.router.get_thread_id(message)
+        user_text = self.router.normalized_text_content(message)
         if self.router.is_command(message):
-            reply = self.command_handler.handle(message, project, thread_id)
+            reply = self.command_handler.handle(message, project, thread_id, text=user_text)
             await self.sender.send_text(
                 message.chat_id,
                 reply,
@@ -59,7 +60,7 @@ class BotApp:
         builtin_tools = BuiltinTools(skills_registry)
         mcp_manager = self._create_mcp_manager(project.get_mcp_config())
 
-        conversation.append(message.to_openai_message())
+        conversation.append({"role": "user", "content": user_text})
         system_prompt = _build_system_prompt(
             project.get_agents_md(),
             skills_registry.get_system_prompt_fragment(),

@@ -56,7 +56,10 @@ Planned and implemented the first lark-agent-bot child task: Python package skel
 
 ### Main Changes
 
-(Add details)
+- Raised the project Python requirement from `>=3.11` to `>=3.13`.
+- Resolved runtime direct dependencies with `uv` against Python 3.13: `lark-oapi`, `mcp`, `openai`, and `pyyaml`.
+- Resolved development direct dependencies with `uv` against Python 3.13: `pytest` and `pytest-asyncio`.
+- Synchronized `uv.lock` and documented the future dependency-resolution convention in backend quality guidelines.
 
 ### Git Commits
 
@@ -66,7 +69,10 @@ Planned and implemented the first lark-agent-bot child task: Python package skel
 
 ### Testing
 
-- [OK] (Add test results)
+- [OK] `UV_CACHE_DIR=.uv-cache UV_PYTHON_INSTALL_DIR=.uv-python uv sync --python 3.13 --extra dev`
+- [OK] `UV_CACHE_DIR=.uv-cache uv lock --check`
+- [OK] `UV_CACHE_DIR=.uv-cache uv run --extra dev pytest` (`37 passed`)
+- [OK] `UV_CACHE_DIR=.uv-cache uv run --extra dev python -m compileall src`
 
 ### Status
 
@@ -129,6 +135,39 @@ Implemented the lark-agent MCP child task: .agents/mcp.yaml defaults/group merge
 | Hash | Message |
 |------|---------|
 | `d57ba83` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 4: Update Python 3.13 dependency baseline
+
+**Date**: 2026-07-05
+**Task**: Update Python 3.13 dependency baseline
+**Branch**: `master`
+
+### Summary
+
+Updated the project Python requirement to >=3.13, resolved runtime and dev direct dependencies through uv against Python 3.13, synchronized uv.lock, added dependency-resolution guidance to backend quality specs, validated uv sync, lock check, pytest, and compileall, then archived the task.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7b02ef8` | (see git log) |
 
 ### Testing
 

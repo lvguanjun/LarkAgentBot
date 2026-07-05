@@ -5,7 +5,8 @@ chat to a project directory, keeps each thread as an independent conversation,
 and prepares project-scoped AI conversations with AGENTS.md rules, Skills, and
 OpenAI-compatible tool calling.
 
-The current implementation is a local, transport-independent bot core:
+The current implementation includes the transport-independent bot core and a
+minimal Feishu WebSocket adapter:
 
 - typed YAML configuration loading from `config.yaml`
 - transport-independent message dataclasses and sender protocol
@@ -16,19 +17,24 @@ The current implementation is a local, transport-independent bot core:
   `data/groups/<chat_id>/.agents/skills/`
 - Tier 1 Skills list injection into the system prompt
 - safe built-in `read_skill(name, file?)` tool for SKILL.md and reference files
-- bounded OpenAI-compatible tool loop with complete tool-call persistence
+- MCP config loading from `.agents/mcp.yaml`, MCP tool discovery, and
+  OpenAI-compatible function schema conversion
+- bounded OpenAI-compatible tool loop with complete built-in/MCP tool-call
+  persistence
+- Feishu WebSocket message-event conversion for text, post, and image messages
+- Feishu text replies through the `MessageSender` boundary
+- ack-first WebSocket event handling with in-process TTL deduplication
+- `python -m lark_agent.main` as a minimal live bot entrypoint
 - injectable fake sender and fake LLM clients for local tests
 
-Live Feishu WebSocket integration, MCP tools, management commands, and a
-runnable `main.py` entrypoint are still planned.
+Management commands are still planned.
 
-The next recommended implementation slice is MCP tools: load `.agents/mcp.yaml`,
-discover MCP tools, convert them to OpenAI-compatible function schemas, and
-dispatch MCP tool calls through the existing tool loop.
+The next recommended implementation slice is management commands such as
+`/help`, `/config`, `/skill list`, `/mcp list`, and `/reset`.
 
 ## Requirements
 
-- Python 3.11+
+- Python 3.13+
 - `uv` for dependency resolution and test execution
 
 ## Setup
@@ -106,6 +112,19 @@ conversation:
 
 本地 `data/defaults/AGENTS.md` 会作为默认 system prompt。存在群组级
 `data/groups/<chat_id>/AGENTS.md` 时，群组级文件优先生效。
+
+## Run The Live Bot
+
+准备好 `config.yaml`、本地 `data/defaults/` 资源和飞书应用凭证后，可以启动
+WebSocket 长连接：
+
+```bash
+UV_CACHE_DIR=.uv-cache uv run --extra dev python -m lark_agent.main
+```
+
+`lark.bot_id` 建议配置为机器人在飞书事件 `mentions[].id.open_id` 中出现的
+open_id；如果你的租户事件使用 `user_id` 或 `union_id` 匹配，也可以配置为对应
+ID。
 
 ## Skills
 

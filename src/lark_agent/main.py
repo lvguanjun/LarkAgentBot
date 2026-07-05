@@ -1,0 +1,59 @@
+from __future__ import annotations
+
+import argparse
+from collections.abc import Sequence
+
+import lark_oapi as lark
+
+from lark_agent.app import BotApp
+from lark_agent.config import AppConfig, load_config
+from lark_agent.llm_client import LLMClient
+from lark_agent.transport.websocket import LarkMessageSender, LarkWebSocketBotRunner
+
+
+def validate_lark_config(config: AppConfig) -> None:
+    missing = [
+        name
+        for name, value in (
+            ("lark.app_id", config.lark.app_id),
+            ("lark.app_secret", config.lark.app_secret),
+            ("lark.bot_id", config.lark.bot_id),
+        )
+        if not value
+    ]
+    if missing:
+        raise ValueError(f"Missing required config values: {', '.join(missing)}")
+
+
+def build_runner(config: AppConfig) -> LarkWebSocketBotRunner:
+    validate_lark_config(config)
+    lark_client = (
+        lark.Client.builder()
+        .app_id(config.lark.app_id)
+        .app_secret(config.lark.app_secret)
+        .build()
+    )
+    sender = LarkMessageSender(lark_client)
+    app = BotApp(
+        config,
+        sender=sender,
+        llm_client=LLMClient.from_config(config.llm),
+    )
+    return LarkWebSocketBotRunner(
+        app_id=config.lark.app_id,
+        app_secret=config.lark.app_secret,
+        app=app,
+    )
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description="Run the Lark Agent Feishu WebSocket bot.")
+    parser.add_argument("--config", default="config.yaml", help="Path to config.yaml")
+    args = parser.parse_args(argv)
+
+    config = load_config(args.config)
+    build_runner(config).start()
+
+
+if __name__ == "__main__":
+    main()

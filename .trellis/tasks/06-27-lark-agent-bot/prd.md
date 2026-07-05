@@ -14,7 +14,8 @@
 - Skills 采用 SKILL.md + YAML frontmatter 标准，三层渐进加载
 - `07-04-lark-agent-bot-core` 已归档完成：已交付 Python 包骨架、配置加载、transport-independent 消息模型、路由规则、Project/Conversation 持久化、AGENTS.md fallback、OpenAI 兼容文本对话闭环。
 - `07-04-lark-agent-bot-skills` 已归档完成：已交付 Skills 发现、Tier 1 system prompt 注入、安全 `read_skill` 内置 tool、bounded OpenAI-compatible tool loop，以及 user → assistant(tool_calls) → tool → assistant(final) JSONL 持久化链路。
-- 当前测试基线：`UV_CACHE_DIR=.uv-cache uv run --extra dev pytest` 通过，26 个测试全部通过。
+- `07-05-runtime-data-git-hygiene` 已归档完成：已交付运行时 `data/` Git ignore、默认资源模板迁移和 README 初始化说明。
+- `07-05-lark-agent-bot-mcp` 已归档完成：已交付 `.agents/mcp.yaml` 加载/合并、MCP stdio client 管理、tool schema 转换、统一 tool 分发、MCP tool result JSONL 持久化和 fake MCP 测试。
 
 ## Requirements
 
@@ -117,11 +118,11 @@
 
 ## Technical Notes
 
-- Python 3.11+
+- Python 3.13+
 - 依赖：`lark-oapi`（飞书 SDK）、`mcp`（MCP SDK）、`openai`（LLM 客户端）、`pyyaml`
 - 飞书话题通过消息事件的 `root_id` 字段识别
 - 长连接使用 `lark.ws.Client`，事件处理使用 `EventDispatcherHandler`
-- 当前证据显示 `.gitignore:1` 到 `.gitignore:6` 尚未忽略 `data/`；`README.md:42` 到 `README.md:66` 与本 PRD 的 R9 约定运行时对话历史会写入 `data/groups/<chat_id>/conversations/<thread_id>/history.jsonl`。当前 Git 已追踪的 `data/` 文件仅为 `data/defaults/AGENTS.md`，尚未发现已追踪的群组消息文件。
+- 当前实现已将运行时 `data/` 排除出 Git，并在 `templates/defaults/` 提供可复制的默认资源模板。
 
 ## Acceptance Criteria
 
@@ -132,12 +133,12 @@
 - [x] 群组拥有独立的 AGENTS.md，内容作为 system prompt 生效
 - [x] Skills 能被发现（Tier 1 列表注入 system prompt）
 - [x] LLM 能通过 `read_skill` tool 读取 Skill 完整内容和 references
-- [ ] MCP tools 能被发现、列举、执行，结果返回给 LLM
+- [x] MCP tools 能被发现、列举、执行，结果返回给 LLM
 - [x] 对话历史正确持久化为 JSONL，包含完整 tool_calls 链路
 - [x] 滑动窗口截断后 LLM 仍能正常工作（不切断 tool 配对）
-- [ ] Git 默认不会显示或提交运行时数据；创建 `data/groups/<chat_id>/conversations/<thread_id>/history.jsonl` 后，`git status --short` 不应列出该文件
-- [ ] Git 默认不会显示或提交本地默认资源；修改 `data/defaults/AGENTS.md` 后，`git status --short` 不应列出该文件
-- [ ] 仓库在 `templates/defaults/` 提供去标识化模板，开发者可据此初始化本地 `data/defaults/`，但模板不位于运行时 `data/` 路径
+- [x] Git 默认不会显示或提交运行时数据；创建 `data/groups/<chat_id>/conversations/<thread_id>/history.jsonl` 后，`git status --short` 不应列出该文件
+- [x] Git 默认不会显示或提交本地默认资源；修改 `data/defaults/AGENTS.md` 后，`git status --short` 不应列出该文件
+- [x] 仓库在 `templates/defaults/` 提供去标识化模板，开发者可据此初始化本地 `data/defaults/`，但模板不位于运行时 `data/` 路径
 - [ ] `/config` 等管理指令可查看/修改群组配置
 
 ## Task Map
@@ -145,16 +146,17 @@
 - `07-04-lark-agent-bot-core` ✅ archived: first independently verifiable child task. Built the Python package skeleton, local configuration, transport base types, routing rules, Project/Conversation persistence, AGENTS.md fallback, and a fake-LLM text conversation loop. It intentionally excluded live Feishu WebSocket integration, Skills, MCP, and management commands.
 - `07-04-lark-agent-bot-skills` ✅ archived: second independently verifiable child task. Built Skills discovery, Tier 1 system prompt injection, the safe `read_skill` built-in tool, and a bounded OpenAI-compatible tool loop that persists user → assistant(tool_calls) → tool → assistant(final). It intentionally excluded live Feishu WebSocket integration, MCP tools, Skills script execution, and management commands.
 - `07-04-lark-agent-bot-agents-layout` ✅ complete: lightweight child task that moved Skills discovery and MCP planning paths under each project `.agents/` directory instead of placing them directly in the chat group root.
-- `07-05-runtime-data-git-hygiene` ⏳ planned: next lightweight child task. Scope covers ignoring local runtime `data/`, moving committed default resources to `templates/defaults/`, and updating README initialization instructions before any more default/MCP resources are added.
-- Recommended following child task: `lark-agent-bot-mcp`. Scope should cover `.agents/mcp.yaml` loading/fallback, MCP stdio client lifecycle, MCP tool discovery, conversion to OpenAI function tool schemas, dispatching MCP tool calls through the existing tool loop, JSONL persistence of MCP tool results, fake/in-memory MCP tests, and no live Feishu dependency.
-- Later child tasks: live Feishu WebSocket adapter, then management commands (`/help`, `/config`, `/skill list`, `/mcp list`, `/reset`) once MCP and live transport boundaries exist.
+- `07-05-runtime-data-git-hygiene` ✅ archived: lightweight child task. Ignored local runtime `data/`, moved committed default resources to `templates/defaults/`, and updated README initialization instructions.
+- `07-05-lark-agent-bot-mcp` ✅ archived: integrated MCP config loading/fallback, stdio client lifecycle, tool discovery, OpenAI function schema conversion, tool-loop dispatch, JSONL persistence, and fake/in-memory MCP tests.
+- `07-05-lark-agent-bot-feishu-websocket` ⏳ planned: current recommended child task. Scope covers live Feishu WebSocket event reception, event-to-`IncomingMessage` conversion, text replies through `MessageSender`, minimal `main.py`, and tests without real Feishu credentials.
+- Later child tasks: management commands (`/help`, `/config`, `/skill list`, `/mcp list`, `/reset`) once live transport boundaries exist.
 
 ## Current Implementation Snapshot
 
-- Implemented modules: `config.py`, `transport/base.py`, `router.py`, `project.py`, `conversation.py`, `agents_conf.py`, `skills.py`, `tools.py`, `llm_client.py`, `app.py`.
-- Not yet implemented modules: `transport/websocket.py`, `mcp_manager.py`, `commands.py`, `main.py`.
+- Implemented modules: `config.py`, `transport/base.py`, `router.py`, `project.py`, `conversation.py`, `agents_conf.py`, `skills.py`, `tools.py`, `mcp_manager.py`, `llm_client.py`, `app.py`.
+- Not yet implemented modules: `transport/websocket.py`, `commands.py`, `main.py`.
 - The existing app can be tested locally with fake `MessageSender` and fake LLM clients; it does not yet run as a live Feishu bot.
-- The existing OpenAI-compatible LLM path already supports `tools` and assistant `tool_calls`, which makes MCP the lowest-friction next integration.
+- The existing OpenAI-compatible LLM path already supports built-in tools and MCP tools through one bounded tool loop; live Feishu transport is now the lowest-friction next integration.
 
 ## Decisions Log
 

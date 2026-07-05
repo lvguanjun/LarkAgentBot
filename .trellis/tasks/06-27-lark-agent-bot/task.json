@@ -23,7 +23,8 @@
     "07-04-lark-agent-bot-skills",
     "07-04-lark-agent-bot-agents-layout",
     "07-05-lark-agent-bot-mcp",
-    "07-05-runtime-data-git-hygiene"
+    "07-05-runtime-data-git-hygiene",
+    "07-05-lark-agent-bot-feishu-websocket"
   ],
   "parent": null,
   "relatedFiles": [],

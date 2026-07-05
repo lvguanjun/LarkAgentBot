@@ -104,7 +104,6 @@ LARK_AGENT_DATA_DIR=data
 
 LARK_AGENT_LARK__APP_ID=cli_xxx
 LARK_AGENT_LARK__APP_SECRET=xxx
-LARK_AGENT_LARK__BOT_ID=ou_xxx
 
 LARK_AGENT_LLM__API_KEY=sk-xxx
 LARK_AGENT_LLM__BASE_URL=
@@ -137,7 +136,7 @@ LARK_AGENT_CONVERSATION__MAX_MESSAGES=40
 5. 发布或安装应用到目标企业，并把机器人加入需要测试的群聊。
 
 如果机器人只在私聊可用但群聊无响应，通常是应用没有进群、没有订阅消息事件，
-或 `LARK_AGENT_LARK__BOT_ID` 没有和事件里的 mention ID 对上。
+或消息里没有实际提及当前应用的机器人。
 
 ### 2. 填写本地配置
 
@@ -152,16 +151,23 @@ cp .env.example .env
 - `LARK_AGENT_DATA_DIR`：运行时数据目录，默认 `data`。
 - `LARK_AGENT_LARK__APP_ID`：飞书开放平台应用的 `App ID`。
 - `LARK_AGENT_LARK__APP_SECRET`：飞书开放平台应用的 `App Secret`，不要提交到 Git。
-- `LARK_AGENT_LARK__BOT_ID`：机器人在消息事件 `mentions[].id` 中出现的 ID。优先使用
-  `open_id`；如果你的租户事件实际返回 `user_id` 或 `union_id`，就填对应值。
+- 机器人 ID：启动时会通过飞书「获取机器人信息」接口自动读取 `bot.open_id`，
+  不需要在 `.env` 中配置。
 - `LARK_AGENT_LLM__API_KEY`：OpenAI-compatible API key；为空时真实对话无法调用模型。
 - `LARK_AGENT_LLM__BASE_URL`：兼容 OpenAI SDK 的自定义网关地址；使用默认 OpenAI 地址时留空。
 - `LARK_AGENT_LLM__MODEL`：模型名，默认 `gpt-4.1-mini`。
 - `LARK_AGENT_CONVERSATION__MAX_MESSAGES`：每个 conversation 的上下文消息窗口。
 
-第一次确认 `bot_id` 时，可以先启动机器人，在群里提及机器人并发送 `/config`。
-如果没有响应，临时查看事件日志或在调试环境打印 `mentions[].id`，把其中和机器
-人对应的 ID 填入 `LARK_AGENT_LARK__BOT_ID`。
+如果需要排查机器人身份，可以先在 `.env` 中填写 `LARK_AGENT_LARK__APP_ID` 和
+`LARK_AGENT_LARK__APP_SECRET`，再手动运行：
+
+```bash
+UV_CACHE_DIR=.uv-cache uv run --extra dev python -m lark_agent.transport.lark.bot_info
+```
+
+脚本会调用飞书「获取机器人信息」接口并打印 `bot.open_id`。正常启动路径也会执行
+同样的获取逻辑；如果接口提示机器人未启用，回到开发者后台的「应用功能 - 机器人」
+开启机器人能力并发布。
 
 ### 3. 初始化运行时目录
 
@@ -186,8 +192,8 @@ UV_CACHE_DIR=.uv-cache uv run --extra dev python -m lark_agent.main
 请在包含 `.env` 的项目目录中启动。生产部署可以不使用 `.env`，直接注入同名真实
 环境变量。
 
-启动时如果缺少 `LARK_AGENT_LARK__APP_ID`、`LARK_AGENT_LARK__APP_SECRET` 或
-`LARK_AGENT_LARK__BOT_ID`，进程会直接报错退出。
+启动时如果缺少 `LARK_AGENT_LARK__APP_ID` 或 `LARK_AGENT_LARK__APP_SECRET`，
+进程会直接报错退出。如果自动获取机器人信息失败，进程同样会报错退出。
 
 ### 5. 验证
 
@@ -204,8 +210,8 @@ UV_CACHE_DIR=.uv-cache uv run --extra dev python -m lark_agent.main
 
 - 进程启动后没有任何响应：确认飞书后台使用 WebSocket 事件订阅、应用已发布或
   安装到企业、机器人已加入目标群聊。
-- 群聊不响应但私聊响应：确认群消息里实际提及了机器人，并检查 `LARK_AGENT_LARK__BOT_ID`
-  是否出现在事件 `mentions[].id` 中。
+- 群聊不响应但私聊响应：确认群消息里实际提及了机器人，并用 bot info 脚本确认
+  当前应用的 `bot.open_id`。
 - `/help` 可用但普通问题失败：通常是 `LARK_AGENT_LLM__API_KEY`、
   `LARK_AGENT_LLM__BASE_URL` 或模型名配置不正确。
 - 回复消息接口报权限错误：回到飞书开放平台补齐发送/回复消息权限，并重新发布或

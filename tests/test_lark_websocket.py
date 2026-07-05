@@ -8,7 +8,8 @@ from typing import Any
 import pytest
 
 from lark_agent.config import AppConfig, ConversationConfig, LLMConfig, LarkConfig
-from lark_agent.main import validate_lark_config
+from lark_agent.main import build_runner, validate_lark_config
+from lark_agent.transport.lark.bot_info import LarkBotInfo
 from lark_agent.transport.base import ImagePart, TextPart
 from lark_agent.transport.lark import (
     LarkMessageEventAdapter,
@@ -280,5 +281,66 @@ def test_validate_lark_config_fails_fast_for_missing_credentials(tmp_path) -> No
         conversation=ConversationConfig(),
     )
 
-    with pytest.raises(ValueError, match="lark.app_secret, lark.bot_id"):
+    with pytest.raises(ValueError, match="lark.app_secret"):
         validate_lark_config(config)
+
+
+def test_validate_lark_config_does_not_require_env_bot_id(tmp_path) -> None:
+    config = AppConfig(
+        data_dir=tmp_path,
+        lark=LarkConfig(app_id="app", app_secret="secret"),
+        llm=LLMConfig(),
+        conversation=ConversationConfig(),
+    )
+
+    validate_lark_config(config)
+
+
+def test_build_runner_fetches_bot_open_id_for_router(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    fake_client = FakeLarkClient(FakeMessageApi())
+    requested_clients: list[tuple[str, str]] = []
+
+    class FakeClientBuilder:
+        def __init__(self) -> None:
+            self._app_id = ""
+            self._app_secret = ""
+
+        def app_id(self, app_id: str) -> "FakeClientBuilder":
+            self._app_id = app_id
+            return self
+
+        def app_secret(self, app_secret: str) -> "FakeClientBuilder":
+            self._app_secret = app_secret
+            return self
+
+        def build(self) -> FakeLarkClient:
+            requested_clients.append((self._app_id, self._app_secret))
+            return fake_client
+
+    monkeypatch.setattr(
+        "lark_agent.main.lark.Client.builder",
+        lambda: FakeClientBuilder(),
+    )
+    monkeypatch.setattr(
+        "lark_agent.main.fetch_lark_bot_info",
+        lambda client: LarkBotInfo(
+            activate_status=2,
+            app_name="agent",
+            avatar_url="",
+            ip_white_list=(),
+            open_id="ou_from_api",
+        ),
+    )
+
+    config = AppConfig(
+        data_dir=tmp_path,
+        lark=LarkConfig(app_id="app", app_secret="secret", bot_id="stale-env-id"),
+        llm=LLMConfig(model="fake"),
+        conversation=ConversationConfig(),
+    )
+
+    runner = build_runner(config)
+
+    assert requested_clients == [("app", "secret")]
+    assert runner.app.config.lark.bot_id == "ou_from_api"
+    assert runner.app.router.bot_id == "ou_from_api"

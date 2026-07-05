@@ -10,7 +10,6 @@ CONFIG_ENV_KEYS = (
     "LARK_AGENT_DATA_DIR",
     "LARK_AGENT_LARK__APP_ID",
     "LARK_AGENT_LARK__APP_SECRET",
-    "LARK_AGENT_LARK__BOT_ID",
     "LARK_AGENT_LLM__BASE_URL",
     "LARK_AGENT_LLM__API_KEY",
     "LARK_AGENT_LLM__MODEL",
@@ -45,7 +44,6 @@ def test_load_config_from_dotenv(tmp_path: Path) -> None:
                 "LARK_AGENT_DATA_DIR=runtime-data",
                 "LARK_AGENT_LARK__APP_ID=app",
                 "LARK_AGENT_LARK__APP_SECRET=secret",
-                "LARK_AGENT_LARK__BOT_ID=bot",
                 "LARK_AGENT_LLM__BASE_URL=https://example.test/v1",
                 "LARK_AGENT_LLM__API_KEY=key",
                 "LARK_AGENT_LLM__MODEL=custom-model",
@@ -60,7 +58,7 @@ def test_load_config_from_dotenv(tmp_path: Path) -> None:
     assert config.data_dir == (tmp_path / "runtime-data").resolve()
     assert config.lark.app_id == "app"
     assert config.lark.app_secret == "secret"
-    assert config.lark.bot_id == "bot"
+    assert config.lark.bot_id == ""
     assert config.llm.base_url == "https://example.test/v1"
     assert config.llm.api_key == "key"
     assert config.llm.model == "custom-model"
@@ -111,6 +109,18 @@ def test_nested_env_names_preserve_field_underscores(monkeypatch: pytest.MonkeyP
     assert config.llm.api_key == "key"
     assert config.lark.app_id == "app"
     assert config.conversation.max_messages == 9
+
+
+def test_load_config_ignores_legacy_lark_bot_id_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LARK_AGENT_LARK__APP_ID", "app")
+    monkeypatch.setenv("LARK_AGENT_LARK__APP_SECRET", "secret")
+    monkeypatch.setenv("LARK_AGENT_LARK__" + "BOT_ID", "legacy-bot")
+
+    config = load_config()
+
+    assert config.lark.app_id == "app"
+    assert config.lark.app_secret == "secret"
+    assert config.lark.bot_id == ""
 
 
 def test_invalid_max_messages_raises_validation_error(monkeypatch: pytest.MonkeyPatch) -> None:

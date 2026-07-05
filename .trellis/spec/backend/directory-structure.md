@@ -98,7 +98,8 @@ src/
   - `config.data_dir`
   - `config.lark.app_id`
   - `config.lark.app_secret`
-  - `config.lark.bot_id`
+  - `config.lark.bot_id` (runtime value; live startup resolves it from Lark
+    bot info instead of requiring user-provided environment configuration)
   - `config.llm.api_key`
   - `config.llm.base_url`
   - `config.llm.model`
@@ -114,7 +115,6 @@ src/
   - `LARK_AGENT_DATA_DIR`
   - `LARK_AGENT_LARK__APP_ID`
   - `LARK_AGENT_LARK__APP_SECRET`
-  - `LARK_AGENT_LARK__BOT_ID`
   - `LARK_AGENT_LLM__API_KEY`
   - `LARK_AGENT_LLM__BASE_URL`
   - `LARK_AGENT_LLM__MODEL`
@@ -132,7 +132,9 @@ src/
 - Non-integer `LARK_AGENT_CONVERSATION__MAX_MESSAGES` -> Pydantic validation
   error.
 - Missing live Feishu credentials at runner startup -> `validate_lark_config`
-  raises `ValueError` naming the missing `lark.*` fields.
+  raises `ValueError` naming missing `lark.app_id` / `lark.app_secret` fields.
+- Missing bot identity at runner startup -> bot info resolution raises before
+  opening WebSocket; do not ask users to configure a bot ID environment value.
 - Unknown extra values in `.env` -> ignored by application settings.
 
 ### 5. Good/Base/Bad Cases
@@ -141,6 +143,8 @@ src/
 - Base: no `.env` and no relevant process environment yields code defaults.
 - Bad: reintroducing `config.yaml` or `--config` for application settings
   violates the active-development no-backward-compatibility rule.
+- Bad: requiring users to copy `bot.open_id` into `.env` reintroduces stale
+  identity configuration and should not be used for live startup.
 
 ### 6. Tests Required
 
@@ -151,6 +155,8 @@ src/
 - `LARK_AGENT_LLM__API_KEY` and `LARK_AGENT_CONVERSATION__MAX_MESSAGES` preserve
   field underscores through the `__` nested delimiter.
 - Invalid integer and empty data directory values raise validation errors.
+- Runner startup without `lark.bot_id` still succeeds through mocked bot info
+  resolution and injects the returned `open_id` into `BotApp`.
 
 ### 7. Wrong vs Correct
 
@@ -177,6 +183,94 @@ class AppSettings(BaseSettings):
 ```
 
 Environment variables and `.env` are the application configuration boundary.
+
+## Scenario: Lark Bot Identity Resolution
+
+### 1. Scope / Trigger
+
+- Trigger: live Lark startup needs the bot identity used by mention routing.
+- The identity is external state owned by Lark. Resolve it from the Lark bot
+  info API at startup instead of making users maintain a local bot ID setting.
+- SDK-specific request construction stays under `src/lark_agent/transport/lark/`.
+
+### 2. Signatures
+
+- `build_bot_info_request() -> BaseRequest`
+- `fetch_lark_bot_info(client: LarkClientLike) -> LarkBotInfo`
+- `python -m lark_agent.transport.lark.bot_info [--json]`
+- `build_runner(config: AppConfig) -> LarkWebSocketBotRunner`
+
+### 3. Contracts
+
+- Bot info request:
+  - HTTP method: `GET`
+  - URI: `https://fsopen.bytedance.net/open-apis/bot/v3/info`
+  - token type: `AccessTokenType.TENANT`
+- Successful response must contain `code == 0` and `bot.open_id`.
+- `build_runner()` must resolve bot info after validating app credentials and
+  before constructing `BotApp`.
+- `build_runner()` must pass a derived `AppConfig` to `BotApp` where
+  `config.lark.bot_id == bot_info.open_id`.
+- Bot ID is not a public environment key. If a legacy local value exists, live
+  startup still ignores it and prefers the Lark API response.
+
+### 4. Validation & Error Matrix
+
+- Missing `lark.app_id` -> `validate_lark_config` raises `ValueError`.
+- Missing `lark.app_secret` -> `validate_lark_config` raises `ValueError`.
+- Bot info response with non-zero `code` -> `LarkBotInfoError` naming code/msg.
+- Bot info response without `bot` object -> `LarkBotInfoError`.
+- Bot info response without non-empty `bot.open_id` -> `LarkBotInfoError`.
+- Bot info failure -> startup fails before opening WebSocket.
+
+### 5. Good/Base/Bad Cases
+
+- Good: `.env` contains only app credentials and LLM settings; startup fetches
+  `bot.open_id` and group mention routing works.
+- Base: manual bot info script prints `open_id` for diagnostics without asking
+  users to write it back to `.env`.
+- Bad: `build_runner()` uses `config.lark.bot_id` from `.env` when it differs
+  from the API response.
+
+### 6. Tests Required
+
+- Request construction asserts method, URI, and tenant token type.
+- Response parsing asserts `open_id`, app metadata, and error cases.
+- Runner construction test patches the Lark client and bot info fetcher, then
+  asserts `BotApp.config.lark.bot_id` and `MessageRouter.bot_id` equal the API
+  `open_id`.
+- Config validation test asserts missing app secret fails while missing bot ID
+  does not.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```python
+validate_lark_config(config)  # requires config.lark.bot_id from .env
+app = BotApp(config, sender=sender, llm_client=llm_client)
+```
+
+This makes startup depend on stale local identity configuration.
+
+#### Correct
+
+```python
+validate_lark_config(config)
+bot_info = fetch_lark_bot_info(lark_client)
+runtime_config = config.model_copy(
+    update={
+        "lark": LarkConfig(
+            app_id=config.lark.app_id,
+            app_secret=config.lark.app_secret,
+            bot_id=bot_info.open_id,
+        )
+    }
+)
+app = BotApp(runtime_config, sender=sender, llm_client=llm_client)
+```
+
+The app uses the live bot identity returned by Lark.
 
 ## Scenario: Feishu WebSocket Transport Adapter
 
@@ -210,8 +304,10 @@ Environment variables and `.env` are the application configuration boundary.
 
 ### 4. Validation & Error Matrix
 
-- Missing `lark.app_id`, `lark.app_secret`, or `lark.bot_id` at startup ->
-  raise `ValueError` before opening WebSocket.
+- Missing `lark.app_id` or `lark.app_secret` at startup -> raise `ValueError`
+  before opening WebSocket.
+- Missing or invalid bot identity from bot info resolution -> raise before
+  opening WebSocket.
 - Invalid message JSON -> log and return `None`.
 - Unsupported message/chat type -> return `None`.
 - Duplicate dedupe key in TTL window -> return without scheduling a task.
@@ -235,8 +331,8 @@ Environment variables and `.env` are the application configuration boundary.
 - Sender tests with fake message API asserting reply/create request fields.
 - Runner tests asserting ack-first scheduling, TTL dedupe, missing-key skip,
   background error logging, and event-handler registration.
-- Main-entry tests should cover config validation only; never start a real
-  WebSocket in unit tests.
+- Main-entry tests should cover config validation and bot identity injection
+  with fake Lark clients; never start a real WebSocket in unit tests.
 
 ### 7. Wrong vs Correct
 

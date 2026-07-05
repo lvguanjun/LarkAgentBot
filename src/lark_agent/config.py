@@ -14,6 +14,13 @@ class LarkConfig(BaseModel):
     bot_id: str = ""
 
 
+class _LarkSettings(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    app_id: str = ""
+    app_secret: str = ""
+
+
 class LLMConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -53,7 +60,7 @@ class _AppSettings(BaseSettings):
     )
 
     data_dir: Path = Path("data")
-    lark: LarkConfig = Field(default_factory=LarkConfig)
+    lark: _LarkSettings = Field(default_factory=_LarkSettings)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     conversation: ConversationConfig = Field(default_factory=ConversationConfig)
 
@@ -68,7 +75,7 @@ def load_config(*, data_dir: str | Path | None = None) -> AppConfig:
     configured_data_dir = Path(data_dir) if data_dir is not None else settings.data_dir
     return AppConfig(
         data_dir=_resolve_data_dir(configured_data_dir),
-        lark=settings.lark,
+        lark=LarkConfig(app_id=settings.lark.app_id, app_secret=settings.lark.app_secret),
         llm=settings.llm,
         conversation=settings.conversation,
     )

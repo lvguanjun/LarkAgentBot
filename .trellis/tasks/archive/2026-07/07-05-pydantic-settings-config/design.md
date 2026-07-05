@@ -52,7 +52,7 @@ config.data_dir
 LARK_AGENT_DATA_DIR=data
 LARK_AGENT_LARK__APP_ID=cli_xxx
 LARK_AGENT_LARK__APP_SECRET=xxx
-LARK_AGENT_LARK__BOT_ID=ou_xxx
+<legacy bot id env>=ou_xxx
 LARK_AGENT_LLM__API_KEY=sk-xxx
 LARK_AGENT_LLM__BASE_URL=
 LARK_AGENT_LLM__MODEL=gpt-4.1-mini

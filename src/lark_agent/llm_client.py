@@ -30,7 +30,7 @@ class LLMClient:
         self._client = client
 
     @classmethod
-    def from_config(cls, config: LLMConfig) -> "LLMClient":
+    def from_config(cls, config: LLMConfig) -> LLMClient:
         return cls(config)
 
     async def complete(self, system_prompt: str, messages: list[dict[str, Any]]) -> str:
@@ -79,7 +79,7 @@ class LLMClient:
         messages: list[dict[str, Any]],
         *,
         tools: list[dict[str, Any]] | None = None,
-    ) -> AsyncGenerator[StreamChunk, None]:
+    ) -> AsyncGenerator[StreamChunk]:
         if self._client is not None and hasattr(self._client, "stream_message"):
             result = self._client.stream_message(system_prompt, messages, tools=tools)
             if inspect.isawaitable(result):
@@ -173,7 +173,9 @@ def _merge_tool_call_deltas(accumulated: list[dict[str, Any]], deltas: Any) -> N
             continue
 
         while len(accumulated) <= index:
-            accumulated.append({"id": "", "type": "function", "function": {"name": "", "arguments": ""}})
+            accumulated.append(
+                {"id": "", "type": "function", "function": {"name": "", "arguments": ""}}
+            )
 
         entry = accumulated[index]
         tc_id = getattr(delta_tc, "id", None)

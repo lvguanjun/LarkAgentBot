@@ -57,10 +57,7 @@ class LarkMessageSender:
             .build()
         )
         request = (
-            CreateMessageRequest.builder()
-            .receive_id_type("chat_id")
-            .request_body(body)
-            .build()
+            CreateMessageRequest.builder().receive_id_type("chat_id").request_body(body).build()
         )
         response = await self._message_api.acreate(request)
         _raise_for_failed_response(response, "create")

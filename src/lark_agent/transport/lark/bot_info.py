@@ -100,13 +100,13 @@ def fetch_lark_bot_info(client: LarkClientLike) -> LarkBotInfo:
 
 def build_lark_client(config: AppConfig) -> lark.Client:
     validate_lark_app_credentials(config)
-    return lark.Client.builder().app_id(config.lark.app_id).app_secret(config.lark.app_secret).build()
+    return (
+        lark.Client.builder().app_id(config.lark.app_id).app_secret(config.lark.app_secret).build()
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        description="Fetch Lark bot info and print the bot open_id."
-    )
+    parser = argparse.ArgumentParser(description="Fetch Lark bot info and print the bot open_id.")
     parser.add_argument("--json", action="store_true", help="Print the bot info as JSON.")
     args = parser.parse_args(argv)
 

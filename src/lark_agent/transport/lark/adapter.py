@@ -22,7 +22,6 @@ from lark_agent.transport.base import (
     TextPart,
 )
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -87,7 +86,11 @@ class LarkMessageEventAdapter:
             return [TextPart(text)] if isinstance(text, str) else None
         if message_type == "image":
             file_key = _image_key(parsed)
-            return [ImagePart(file_key=file_key)] if file_key else _summary_if_readable(message_type, parsed)
+            return (
+                [ImagePart(file_key=file_key)]
+                if file_key
+                else _summary_if_readable(message_type, parsed)
+            )
         if message_type == "post":
             parts = _flatten_post_content(parsed)
             return parts or None
@@ -123,7 +126,11 @@ class LarkMessageEventAdapter:
             return _summary_if_readable(message_type, parsed)
         if message_type == "sticker":
             file_key = _first_string(parsed, ("file_key",))
-            return [StickerPart(file_key=file_key)] if file_key else _summary_if_readable(message_type, parsed)
+            return (
+                [StickerPart(file_key=file_key)]
+                if file_key
+                else _summary_if_readable(message_type, parsed)
+            )
         if message_type == "interactive":
             parts = _flatten_interactive_content(parsed)
             return parts or [_summary_part(message_type, parsed)]
@@ -329,7 +336,9 @@ def _business_summary_part(message_type: str, content: dict[str, Any]) -> Summar
 
 def _summary_part(kind: str, content: dict[str, Any]) -> SummaryPart:
     title = _first_string(content, ("text", "title", "placeholder", "name", "content"))
-    return SummaryPart(kind=kind, title=title, fields=_string_fields(content, exclude={"tag", "text", "title"}))
+    return SummaryPart(
+        kind=kind, title=title, fields=_string_fields(content, exclude={"tag", "text", "title"})
+    )
 
 
 def _summary_if_readable(kind: str, content: dict[str, Any]) -> list[SummaryPart] | None:

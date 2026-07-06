@@ -2,8 +2,13 @@ from __future__ import annotations
 
 import re
 
-from lark_agent.transport.base import ContentPart, IncomingMessage, MentionPart, TextPart, content_part_text
-
+from lark_agent.transport.base import (
+    ContentPart,
+    IncomingMessage,
+    MentionPart,
+    TextPart,
+    content_part_text,
+)
 
 LEADING_MENTION_TOKEN_RE = re.compile(r"^(?:\s*@_user_\d+\s*)+")
 
@@ -18,9 +23,9 @@ class MessageRouter:
             return True
         if self.is_bot_mentioned(message):
             return True
-        if message.thread_id and self.is_thread_activated(message.chat_id, message.thread_id):
-            return True
-        return False
+        return bool(
+            message.thread_id and self.is_thread_activated(message.chat_id, message.thread_id)
+        )
 
     def is_bot_mentioned(self, message: IncomingMessage) -> bool:
         return bool(self.bot_id) and self.bot_id in message.mentions
@@ -41,7 +46,9 @@ class MessageRouter:
         return self.is_bot_mentioned(message) and text.startswith("/")
 
     def normalized_text_content(self, message: IncomingMessage) -> str:
-        return "".join(content_part_text(part) for part in self.normalized_content_parts(message)).strip()
+        return "".join(
+            content_part_text(part) for part in self.normalized_content_parts(message)
+        ).strip()
 
     def normalized_content_parts(self, message: IncomingMessage) -> list[ContentPart]:
         if message.chat_type != "group" or not self.is_bot_mentioned(message):

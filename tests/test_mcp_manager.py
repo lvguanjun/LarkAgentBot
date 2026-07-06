@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any
 
 import pytest
 
@@ -116,7 +117,9 @@ mcpServers:
         load_mcp_config(defaults, tmp_path / "groups" / "chat-1")
 
 
-def test_mcp_config_interpolates_env_and_requires_existing_values(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_mcp_config_interpolates_env_and_requires_existing_values(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     defaults = tmp_path / "defaults"
     write_mcp_config(
         defaults,
@@ -204,7 +207,9 @@ async def test_mcp_tool_name_collision_is_rejected() -> None:
         ]
     )
     factory = FakeSessionFactory({"db": session})
-    manager = MCPManager(MCPConfig({"db": MCPServerConfig(name="db", command="python")}), session_factory=factory)
+    manager = MCPManager(
+        MCPConfig({"db": MCPServerConfig(name="db", command="python")}), session_factory=factory
+    )
 
     with pytest.raises(ValueError, match="tool name collision"):
         await manager.start()
@@ -217,7 +222,9 @@ async def test_tool_dispatcher_routes_builtin_and_mcp_tools(tmp_path: Path) -> N
         session_factory=FakeSessionFactory({"search": session}),
     )
     await manager.start()
-    dispatcher = ToolDispatcher(BuiltinTools(SkillsRegistry.discover(tmp_path / "defaults", tmp_path / "project")), manager)
+    dispatcher = ToolDispatcher(
+        BuiltinTools(SkillsRegistry.discover(tmp_path / "defaults", tmp_path / "project")), manager
+    )
 
     mcp_result = await dispatcher.call_tool(build_mcp_tool_name("search", "lookup"), {"q": "x"})
     unknown_result = await dispatcher.call_tool("unknown", {})

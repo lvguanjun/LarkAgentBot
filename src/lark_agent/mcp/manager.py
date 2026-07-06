@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+from contextlib import AbstractAsyncContextManager, suppress
 from dataclasses import dataclass
-from typing import Any, AsyncContextManager
+from typing import Any
 
 from lark_agent.mcp.config import MCPConfig
 from lark_agent.mcp.naming import build_mcp_tool_name, normalize_tool_name_part
 from lark_agent.mcp.result import format_tool_result
 from lark_agent.mcp.session import MCPSession, MCPSessionFactory, OfficialMCPSessionFactory
-
 
 DEFAULT_TOOL_PARAMETERS: dict[str, Any] = {"type": "object", "properties": {}}
 
@@ -27,7 +27,7 @@ class MCPManager:
     ) -> None:
         self.config = config
         self.session_factory = session_factory or OfficialMCPSessionFactory()
-        self._session_contexts: list[AsyncContextManager[MCPSession]] = []
+        self._session_contexts: list[AbstractAsyncContextManager[MCPSession]] = []
         self._sessions: dict[str, MCPSession] = {}
         self._tools: list[dict[str, Any]] = []
         self._tool_index: dict[str, MCPToolRef] = {}
@@ -70,7 +70,7 @@ class MCPManager:
 
         try:
             result = await session.call_tool(tool_ref.tool_name, args)
-        except Exception as exc:  # noqa: BLE001 - tool errors must be returned to the model.
+        except Exception as exc:
             return f"Error: MCP tool {name!r} failed: {exc}"
 
         return format_tool_result(result)
@@ -78,10 +78,8 @@ class MCPManager:
     async def shutdown(self) -> None:
         while self._session_contexts:
             session_context = self._session_contexts.pop()
-            try:
+            with suppress(Exception):
                 await session_context.__aexit__(None, None, None)
-            except Exception:
-                pass
         self._sessions.clear()
         self._tools = []
         self._tool_index = {}
@@ -98,8 +96,12 @@ class MCPManager:
 
         description = _tool_field(tool, "description")
         input_schema = _tool_field(tool, "inputSchema")
-        parameters = input_schema if isinstance(input_schema, dict) else dict(DEFAULT_TOOL_PARAMETERS)
-        self._tool_index[exposed_name] = MCPToolRef(server_name=server_name, tool_name=raw_tool_name)
+        parameters = (
+            input_schema if isinstance(input_schema, dict) else dict(DEFAULT_TOOL_PARAMETERS)
+        )
+        self._tool_index[exposed_name] = MCPToolRef(
+            server_name=server_name, tool_name=raw_tool_name
+        )
         self._tools.append(
             {
                 "type": "function",
@@ -122,7 +124,9 @@ def _validate_normalized_server_names(servers: dict[str, Any]) -> None:
         normalized = normalize_tool_name_part(server_name)
         previous = normalized_names.get(normalized)
         if previous is not None and previous != server_name:
-            raise ValueError(f"MCP server name collision after normalization: {previous!r} and {server_name!r}")
+            raise ValueError(
+                f"MCP server name collision after normalization: {previous!r} and {server_name!r}"
+            )
         normalized_names[normalized] = server_name
 
 

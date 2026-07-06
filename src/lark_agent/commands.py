@@ -25,7 +25,10 @@ class ManagementCommandHandler:
             return _help_text()
         if command == "/config":
             if args and args[0] == "set":
-                return "Config updates are not supported yet. Use /config to view the current safe summary."
+                return (
+                    "Config updates are not supported yet. "
+                    "Use /config to view the current safe summary."
+                )
             return self._config_text(message, thread_id)
         if command == "/skill":
             if args == ["list"]:

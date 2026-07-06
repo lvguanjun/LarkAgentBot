@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 
-
 MCP_TOOL_PREFIX = "mcp"
 MCP_TOOL_SEPARATOR = "__"
 

@@ -15,7 +15,7 @@ class ProjectStore:
         self.defaults_dir = data_dir / "defaults"
         self.max_messages = max_messages
 
-    def get_project(self, chat_id: str) -> "Project":
+    def get_project(self, chat_id: str) -> Project:
         safe_chat_id = _safe_path_name(chat_id, "chat_id")
         return Project(
             chat_id=safe_chat_id,

@@ -27,7 +27,6 @@ from lark_agent.transport.base import (
     StreamingCardState,
 )
 
-
 logger = logging.getLogger(__name__)
 
 MAX_TOOL_ITERATIONS = 5
@@ -64,7 +63,9 @@ class BotApp:
             config.data_dir,
             max_messages=config.conversation.max_messages,
         )
-        self.mcp_manager_factory = mcp_manager_factory or (lambda mcp_config: MCPManager(mcp_config))
+        self.mcp_manager_factory = mcp_manager_factory or (
+            lambda mcp_config: MCPManager(mcp_config)
+        )
         self.command_handler = ManagementCommandHandler(config)
         self.image_downloader = image_downloader
         self.reactor = reactor
@@ -116,13 +117,23 @@ class BotApp:
 
             if self.card_streamer is not None:
                 reply, send_result = await self._handle_streaming_reply(
-                    message, project, conversation, turn_messages, system_prompt,
-                    tools, tool_dispatcher,
+                    message,
+                    project,
+                    conversation,
+                    turn_messages,
+                    system_prompt,
+                    tools,
+                    tool_dispatcher,
                 )
             else:
                 reply, send_result = await self._handle_text_reply(
-                    message, project, conversation, turn_messages, system_prompt,
-                    tools, tool_dispatcher,
+                    message,
+                    project,
+                    conversation,
+                    turn_messages,
+                    system_prompt,
+                    tools,
+                    tool_dispatcher,
                 )
         finally:
             if mcp_manager is not None:
@@ -399,4 +410,6 @@ async def _safe_remove_reaction(
     try:
         await reactor.remove_reaction(message_id, reaction_id)
     except Exception:
-        logger.warning("Failed to remove reaction %s from %s", reaction_id, message_id, exc_info=True)
+        logger.warning(
+            "Failed to remove reaction %s from %s", reaction_id, message_id, exc_info=True
+        )

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
-from typing import Any, AsyncContextManager, AsyncIterator, Protocol
+from collections.abc import AsyncIterator
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from typing import Any, Protocol
 
 from lark_agent.mcp.config import MCPServerConfig
 
@@ -13,7 +14,7 @@ class MCPSession(Protocol):
 
 
 class MCPSessionFactory(Protocol):
-    def create(self, server: MCPServerConfig) -> AsyncContextManager[MCPSession]: ...
+    def create(self, server: MCPServerConfig) -> AbstractAsyncContextManager[MCPSession]: ...
 
 
 class OfficialMCPSessionFactory:
@@ -28,7 +29,9 @@ class OfficialMCPSessionFactory:
             env=server.env,
             cwd=server.cwd,
         )
-        async with stdio_client(parameters) as (read_stream, write_stream):
-            async with ClientSession(read_stream, write_stream) as session:
-                await session.initialize()
-                yield session
+        async with (
+            stdio_client(parameters) as (read_stream, write_stream),
+            ClientSession(read_stream, write_stream) as session,
+        ):
+            await session.initialize()
+            yield session

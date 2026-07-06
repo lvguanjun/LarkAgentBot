@@ -34,6 +34,17 @@ If the documentation is intended for humans, write it in **Chinese**. If the doc
 - Use src layout python package structure
 - Always use absolute imports
 
+## Pre-Commit Checks
+
+提交代码前先执行自动修复和验证：
+
+```bash
+UV_CACHE_DIR=.uv-cache uv run --extra dev ruff check src tests --fix
+UV_CACHE_DIR=.uv-cache uv run --extra dev ruff format src tests
+UV_CACHE_DIR=.uv-cache uv run --extra dev pytest
+UV_CACHE_DIR=.uv-cache uv run --extra dev python -m compileall src
+```
+
 ## Development Stage
 
 - This project is in active development. Do not implement backward-compatibility code paths; every change should follow the current best-practice design and keep the codebase fully up to date.

@@ -25,9 +25,7 @@ def configure_logging(level: int = logging.INFO) -> None:
         return
 
     handler = logging.StreamHandler()
-    handler.setFormatter(
-        logging.Formatter("[%(name)s] [%(asctime)s] [%(levelname)s] %(message)s")
-    )
+    handler.setFormatter(logging.Formatter("[%(name)s] [%(asctime)s] [%(levelname)s] %(message)s"))
     logger.addHandler(handler)
 
 
@@ -47,10 +45,7 @@ def validate_lark_config(config: AppConfig) -> None:
 def build_runner(config: AppConfig) -> LarkWebSocketBotRunner:
     validate_lark_config(config)
     lark_client = (
-        lark.Client.builder()
-        .app_id(config.lark.app_id)
-        .app_secret(config.lark.app_secret)
-        .build()
+        lark.Client.builder().app_id(config.lark.app_id).app_secret(config.lark.app_secret).build()
     )
     bot_info = fetch_lark_bot_info(lark_client)
     runtime_config = config.model_copy(

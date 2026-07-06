@@ -5,7 +5,6 @@ from pydantic import ValidationError
 
 from lark_agent.config import load_config
 
-
 CONFIG_ENV_KEYS = (
     "LARK_AGENT_DATA_DIR",
     "LARK_AGENT_LARK__APP_ID",

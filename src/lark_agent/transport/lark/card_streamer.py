@@ -21,7 +21,6 @@ from lark_oapi.api.im.v1 import (
 
 from lark_agent.transport.base import SendResult, StreamingCardState
 
-
 logger = logging.getLogger(__name__)
 
 CARD_ELEMENT_ID = "md_main"
@@ -94,10 +93,7 @@ class LarkCardStreamer:
             .build()
         )
         request = (
-            CreateMessageRequest.builder()
-            .receive_id_type("chat_id")
-            .request_body(body)
-            .build()
+            CreateMessageRequest.builder().receive_id_type("chat_id").request_body(body).build()
         )
         response = await self._message_api.acreate(request)
         _raise_for_message_error(response, "create card message")
@@ -106,12 +102,7 @@ class LarkCardStreamer:
     async def update_card_content(
         self, card_id: str, element_id: str, content: str, sequence: int
     ) -> None:
-        body = (
-            ContentCardElementRequestBody.builder()
-            .content(content)
-            .sequence(sequence)
-            .build()
-        )
+        body = ContentCardElementRequestBody.builder().content(content).sequence(sequence).build()
         request = (
             ContentCardElementRequest.builder()
             .card_id(card_id)
@@ -124,18 +115,8 @@ class LarkCardStreamer:
 
     async def close_streaming(self, card_id: str, sequence: int) -> None:
         settings = json.dumps({"config": {"streaming_mode": False}}, ensure_ascii=False)
-        body = (
-            SettingsCardRequestBody.builder()
-            .settings(settings)
-            .sequence(sequence)
-            .build()
-        )
-        request = (
-            SettingsCardRequest.builder()
-            .card_id(card_id)
-            .request_body(body)
-            .build()
-        )
+        body = SettingsCardRequestBody.builder().settings(settings).sequence(sequence).build()
+        request = SettingsCardRequest.builder().card_id(card_id).request_body(body).build()
         response = await self._card_api.asettings(request)
         _raise_for_card_error(response, "close streaming")
 
@@ -153,11 +134,7 @@ def _build_streaming_card_json() -> dict[str, Any]:
                 "print_strategy": "fast",
             },
         },
-        "body": {
-            "elements": [
-                {"tag": "markdown", "content": "", "element_id": CARD_ELEMENT_ID}
-            ]
-        },
+        "body": {"elements": [{"tag": "markdown", "content": "", "element_id": CARD_ELEMENT_ID}]},
     }
 
 

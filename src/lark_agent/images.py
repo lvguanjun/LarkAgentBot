@@ -15,7 +15,6 @@ from lark_agent.transport.base import (
     content_part_text,
 )
 
-
 IMAGE_DOWNLOAD_FAILED_TEXT = "[用户发送了一张图片，但图片下载失败]"
 IMAGE_UNAVAILABLE_TEXT = "[用户发送了一张图片，但图片不可用]"
 IMAGE_REF_TYPE = "image_ref"

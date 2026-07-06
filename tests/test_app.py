@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 
 from lark_agent.app import BotApp, MissingThreadIdError, StreamThrottle, repair_markdown
-from lark_agent.config import AppConfig, ConversationConfig, LLMConfig, LarkConfig
+from lark_agent.config import AppConfig, ConversationConfig, LarkConfig, LLMConfig
 from lark_agent.conversation import Conversation
 from lark_agent.llm_client import LLMClient, StreamChunk
 from lark_agent.mcp.config import MCPConfig, MCPServerConfig
@@ -20,7 +20,6 @@ from lark_agent.transport.base import (
     StreamingCardState,
     TextPart,
 )
-
 
 PNG_BYTES = b"\x89PNG\r\n\x1a\nimage-bytes"
 
@@ -223,7 +222,9 @@ async def test_group_message_without_thread_persists_under_created_topic(tmp_pat
             "reply_in_thread": True,
         }
     ]
-    history_path = tmp_path / "groups" / "chat-1" / "conversations" / "omt-created" / "history.jsonl"
+    history_path = (
+        tmp_path / "groups" / "chat-1" / "conversations" / "omt-created" / "history.jsonl"
+    )
     assert history_path.read_text(encoding="utf-8").splitlines() == [
         '{"role": "user", "content": "hello"}',
         '{"role": "assistant", "content": "assistant reply"}',
@@ -253,7 +254,9 @@ async def test_p2p_message_without_thread_uses_sender_project_and_created_topic(
     await app.handle_message(message)
 
     assert sender.sent[0]["reply_in_thread"] is True
-    history_path = tmp_path / "groups" / "sender-open" / "conversations" / "omt-p2p" / "history.jsonl"
+    history_path = (
+        tmp_path / "groups" / "sender-open" / "conversations" / "omt-p2p" / "history.jsonl"
+    )
     assert history_path.read_text(encoding="utf-8").splitlines() == [
         '{"role": "user", "content": "hello"}',
         '{"role": "assistant", "content": "assistant reply"}',
@@ -594,7 +597,13 @@ async def test_skill_list_command_reports_empty_skills(tmp_path: Path) -> None:
 
 async def test_skill_list_command_reports_skills_and_discovery_errors(tmp_path: Path) -> None:
     defaults = tmp_path / "defaults"
-    write_skill(skills_root(defaults), "writer", name="writer", description="Writes concise docs", body="body")
+    write_skill(
+        skills_root(defaults),
+        "writer",
+        name="writer",
+        description="Writes concise docs",
+        body="body",
+    )
     invalid_dir = skills_root(defaults) / "broken"
     invalid_dir.mkdir(parents=True)
     (invalid_dir / "SKILL.md").write_text("---\nname: broken\n---\n\n# Broken\n", encoding="utf-8")
@@ -622,7 +631,9 @@ async def test_skill_list_command_reports_skills_and_discovery_errors(tmp_path: 
     assert fake_llm.calls == []
 
 
-async def test_mcp_list_command_redacts_env_values_and_does_not_start_manager(tmp_path: Path) -> None:
+async def test_mcp_list_command_redacts_env_values_and_does_not_start_manager(
+    tmp_path: Path,
+) -> None:
     defaults = tmp_path / "defaults"
     mcp_dir = mcp_config_root(defaults)
     mcp_dir.mkdir(parents=True)
@@ -833,7 +844,8 @@ async def test_app_runs_read_skill_tool_loop_and_persists_full_chain(tmp_path: P
         ),
         (
             '{"role": "tool", "tool_call_id": "call-1", "content": '
-            '"---\\nname: writer\\ndescription: Writes concise docs\\n---\\n\\n# Writer\\n\\nUse short sentences.\\n"}'
+            '"---\\nname: writer\\ndescription: Writes concise docs\\n---\\n\\n'
+            '# Writer\\n\\nUse short sentences.\\n"}'
         ),
         '{"role": "assistant", "content": "I loaded the writer skill."}',
     ]
@@ -862,7 +874,10 @@ mcpServers:
                     {
                         "id": "call-mcp-1",
                         "type": "function",
-                        "function": {"name": "mcp__demo__lookup", "arguments": '{"query": "alpha"}'},
+                        "function": {
+                            "name": "mcp__demo__lookup",
+                            "arguments": '{"query": "alpha"}',
+                        },
                     }
                 ],
             },
@@ -945,7 +960,10 @@ mcpServers:
                     {
                         "id": "call-mcp-1",
                         "type": "function",
-                        "function": {"name": "mcp__demo__lookup", "arguments": '{"query": "alpha"}'},
+                        "function": {
+                            "name": "mcp__demo__lookup",
+                            "arguments": '{"query": "alpha"}',
+                        },
                     }
                 ],
             },
@@ -1020,12 +1038,14 @@ class FakeCardStreamer:
         reply_to_message_id: str | None = None,
         reply_in_thread: bool = False,
     ) -> SendResult:
-        self.cards_sent.append({
-            "chat_id": chat_id,
-            "card_id": card_id,
-            "reply_to_message_id": reply_to_message_id,
-            "reply_in_thread": reply_in_thread,
-        })
+        self.cards_sent.append(
+            {
+                "chat_id": chat_id,
+                "card_id": card_id,
+                "reply_to_message_id": reply_to_message_id,
+                "reply_in_thread": reply_in_thread,
+            }
+        )
         return SendResult(message_id="card-msg-1", thread_id=self.thread_id)
 
     async def update_card_content(
@@ -1094,13 +1114,15 @@ def test_stream_throttle_subsequent_calls_within_interval_return_false() -> None
 
 
 async def test_streaming_reply_creates_card_and_streams(tmp_path: Path) -> None:
-    fake_llm = FakeStreamingLLM([
+    fake_llm = FakeStreamingLLM(
         [
-            StreamChunk(delta_text="Hello "),
-            StreamChunk(delta_text="world!"),
-            StreamChunk(finish_reason="stop"),
-        ],
-    ])
+            [
+                StreamChunk(delta_text="Hello "),
+                StreamChunk(delta_text="world!"),
+                StreamChunk(finish_reason="stop"),
+            ],
+        ]
+    )
     sender = FakeSender()
     card_streamer = FakeCardStreamer()
     reactor = FakeReactor()
@@ -1135,9 +1157,11 @@ async def test_streaming_reply_creates_card_and_streams(tmp_path: Path) -> None:
 
 
 async def test_streaming_reply_emoji_lifecycle(tmp_path: Path) -> None:
-    fake_llm = FakeStreamingLLM([
-        [StreamChunk(delta_text="reply", finish_reason="stop")],
-    ])
+    fake_llm = FakeStreamingLLM(
+        [
+            [StreamChunk(delta_text="reply", finish_reason="stop")],
+        ]
+    )
     reactor = FakeReactor()
     card_streamer = FakeCardStreamer()
     app = BotApp(
@@ -1167,8 +1191,11 @@ async def test_streaming_reply_with_tool_calls(tmp_path: Path) -> None:
     defaults.mkdir()
     (defaults / "AGENTS.md").write_text("system prompt", encoding="utf-8")
     write_skill(
-        skills_root(defaults), "writer",
-        name="writer", description="Writes docs", body="Use short sentences.",
+        skills_root(defaults),
+        "writer",
+        name="writer",
+        description="Writes docs",
+        body="Use short sentences.",
     )
 
     tool_call = {
@@ -1176,19 +1203,21 @@ async def test_streaming_reply_with_tool_calls(tmp_path: Path) -> None:
         "type": "function",
         "function": {"name": "read_skill", "arguments": '{"name": "writer"}'},
     }
-    fake_llm = FakeStreamingLLM([
+    fake_llm = FakeStreamingLLM(
         [
-            StreamChunk(delta_text="Let me check..."),
-            StreamChunk(
-                finish_reason="tool_calls",
-                accumulated_tool_calls=[tool_call],
-            ),
-        ],
-        [
-            StreamChunk(delta_text=" Here is the skill content."),
-            StreamChunk(finish_reason="stop"),
-        ],
-    ])
+            [
+                StreamChunk(delta_text="Let me check..."),
+                StreamChunk(
+                    finish_reason="tool_calls",
+                    accumulated_tool_calls=[tool_call],
+                ),
+            ],
+            [
+                StreamChunk(delta_text=" Here is the skill content."),
+                StreamChunk(finish_reason="stop"),
+            ],
+        ]
+    )
     card_streamer = FakeCardStreamer()
     app = BotApp(
         make_config(tmp_path),

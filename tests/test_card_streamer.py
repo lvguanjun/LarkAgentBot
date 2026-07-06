@@ -50,6 +50,4 @@ async def test_close_streaming_sets_streaming_mode_under_config() -> None:
     assert request.card_id == "card-1"
     assert request.request_body.sequence == 7
     assert isinstance(request.request_body.settings, str)
-    assert json.loads(request.request_body.settings) == {
-        "config": {"streaming_mode": False}
-    }
+    assert json.loads(request.request_body.settings) == {"config": {"streaming_mode": False}}

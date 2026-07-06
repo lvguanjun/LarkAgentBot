@@ -10,7 +10,6 @@ from lark_oapi.api.im.v1 import (
     Emoji,
 )
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -42,7 +41,9 @@ class LarkMessageReactor:
             reaction_id = getattr(data, "reaction_id", None)
             return reaction_id if isinstance(reaction_id, str) and reaction_id else None
         except Exception:
-            logger.warning("Exception adding reaction %s to %s", emoji_type, message_id, exc_info=True)
+            logger.warning(
+                "Exception adding reaction %s to %s", emoji_type, message_id, exc_info=True
+            )
             return None
 
     async def remove_reaction(self, message_id: str, reaction_id: str) -> None:

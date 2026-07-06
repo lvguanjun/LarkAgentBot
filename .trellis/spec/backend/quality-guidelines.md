@@ -32,6 +32,10 @@ module installed.
 - Use `uv` for dependency resolution and test execution.
 - In restricted Codex sandboxes, set `UV_CACHE_DIR=.uv-cache` so uv writes cache
   data inside the workspace.
+- Use Ruff for backend linting, import sorting, and formatting. Run it against
+  `src tests`; do not run project pre-commit Ruff commands against `.` because
+  platform automation directories such as `.trellis/`, `.codex/`, and `.cursor/`
+  are not part of the application lint boundary.
 - Treat Python 3.13 as the dependency resolution baseline. When adding or
   upgrading runtime or development dependencies, resolve the latest stable
   version compatible with Python 3.13 through `uv`; do not limit choices to the
@@ -57,6 +61,8 @@ UV_CACHE_DIR=.uv-cache uv lock --python 3.13 --upgrade-package <package>
 Run these checks for backend changes:
 
 ```bash
+UV_CACHE_DIR=.uv-cache uv run --extra dev ruff check src tests
+UV_CACHE_DIR=.uv-cache uv run --extra dev ruff format src tests --check
 UV_CACHE_DIR=.uv-cache uv run --extra dev pytest
 UV_CACHE_DIR=.uv-cache uv run --extra dev python -m compileall src
 ```

@@ -26,7 +26,7 @@ class BuiltinTools:
                     "name": "read_skill",
                     "description": (
                         "Read a skill's full instructions or one of its reference files. "
-                        "Call with just the name for SKILL.md, or include file=\"references/...\"."
+                        'Call with just the name for SKILL.md, or include file="references/...".'
                     ),
                     "parameters": {
                         "type": "object",
@@ -37,7 +37,10 @@ class BuiltinTools:
                             },
                             "file": {
                                 "type": "string",
-                                "description": "Optional reference path under references/, such as references/api.md.",
+                                "description": (
+                                    "Optional reference path under references/, "
+                                    "such as references/api.md."
+                                ),
                             },
                         },
                         "required": ["name"],

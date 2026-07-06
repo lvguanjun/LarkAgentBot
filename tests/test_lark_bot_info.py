@@ -79,7 +79,7 @@ def test_fetch_lark_bot_info_raises_for_nonzero_code() -> None:
 def test_fetch_lark_bot_info_requires_open_id() -> None:
     client = FakeLarkClient({"code": 0, "msg": "ok", "bot": {}})
 
-    with pytest.raises(LarkBotInfoError, match="bot.open_id"):
+    with pytest.raises(LarkBotInfoError, match=r"bot\.open_id"):
         fetch_lark_bot_info(client)
 
 
@@ -92,5 +92,5 @@ def test_validate_lark_app_credentials_does_not_require_bot_id() -> None:
 def test_validate_lark_app_credentials_requires_app_id_and_secret() -> None:
     config = AppConfig(lark=LarkConfig(app_id="cli_xxx"))
 
-    with pytest.raises(ValueError, match="lark.app_secret"):
+    with pytest.raises(ValueError, match=r"lark\.app_secret"):
         validate_lark_app_credentials(config)

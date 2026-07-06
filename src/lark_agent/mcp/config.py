@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import os
-from pathlib import Path
 import re
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import yaml
 
 from lark_agent.mcp.naming import normalize_tool_name_part
-
 
 AGENTS_DIR = ".agents"
 MCP_CONFIG = "mcp.yaml"
@@ -44,7 +43,10 @@ def load_mcp_config(defaults_dir: Path, project_dir: Path) -> MCPConfig:
             normalized = normalize_tool_name_part(server_name)
             previous = normalized_server_names.get(normalized)
             if previous is not None and previous != server_name:
-                raise ValueError(f"MCP server name collision after normalization: {previous!r} and {server_name!r}")
+                raise ValueError(
+                    "MCP server name collision after normalization: "
+                    f"{previous!r} and {server_name!r}"
+                )
 
             enabled = _server_enabled(raw_server, server_name)
             if not enabled:
@@ -96,7 +98,9 @@ def _server_enabled(raw_server: dict[str, Any], server_name: str) -> bool:
     return enabled
 
 
-def _parse_server_config(server_name: str, raw_server: dict[str, Any], config_path: Path) -> MCPServerConfig:
+def _parse_server_config(
+    server_name: str, raw_server: dict[str, Any], config_path: Path
+) -> MCPServerConfig:
     transport = raw_server.get("transport", "stdio")
     if not isinstance(transport, str) or not transport.strip():
         raise ValueError(f"MCP server {server_name!r} transport must be a non-empty string")

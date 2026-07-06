@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Literal, Protocol, TypeAlias
+from typing import Any, Literal, Protocol
 
-
-ChatType: TypeAlias = Literal["group", "p2p"]
+type ChatType = Literal["group", "p2p"]
 
 
 @dataclass(frozen=True)
@@ -104,7 +103,7 @@ class SummaryPart:
     type: Literal["summary"] = "summary"
 
 
-ContentPart: TypeAlias = (
+type ContentPart = (
     TextPart
     | ImagePart
     | MentionPart
@@ -201,8 +200,7 @@ class MessageSender(Protocol):
         root_id: str | None = None,
         reply_to_message_id: str | None = None,
         reply_in_thread: bool = False,
-    ) -> "SendResult":
-        ...
+    ) -> SendResult: ...
 
 
 @dataclass(frozen=True)
@@ -217,8 +215,7 @@ class MessageReactor(Protocol):
         """Add an emoji reaction. Returns reaction_id for later removal."""
         ...
 
-    async def remove_reaction(self, message_id: str, reaction_id: str) -> None:
-        ...
+    async def remove_reaction(self, message_id: str, reaction_id: str) -> None: ...
 
 
 @dataclass
@@ -233,8 +230,7 @@ class StreamingCardState:
 
 
 class CardStreamer(Protocol):
-    async def create_streaming_card(self) -> StreamingCardState:
-        ...
+    async def create_streaming_card(self) -> StreamingCardState: ...
 
     async def send_card(
         self,
@@ -243,18 +239,14 @@ class CardStreamer(Protocol):
         *,
         reply_to_message_id: str | None = None,
         reply_in_thread: bool = False,
-    ) -> SendResult:
-        ...
+    ) -> SendResult: ...
 
     async def update_card_content(
         self, card_id: str, element_id: str, content: str, sequence: int
-    ) -> None:
-        ...
+    ) -> None: ...
 
-    async def close_streaming(self, card_id: str, sequence: int) -> None:
-        ...
+    async def close_streaming(self, card_id: str, sequence: int) -> None: ...
 
 
 class ImageDownloader(Protocol):
-    async def download_image(self, message_id: str, file_key: str) -> DownloadedImage:
-        ...
+    async def download_image(self, message_id: str, file_key: str) -> DownloadedImage: ...

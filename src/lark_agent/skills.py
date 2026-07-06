@@ -5,7 +5,6 @@ from pathlib import Path
 
 import yaml
 
-
 AGENTS_DIR = ".agents"
 SKILLS_DIR = "skills"
 
@@ -24,12 +23,14 @@ class SkillLoadError:
 
 
 class SkillsRegistry:
-    def __init__(self, skills: dict[str, SkillMeta] | None = None, errors: list[SkillLoadError] | None = None) -> None:
+    def __init__(
+        self, skills: dict[str, SkillMeta] | None = None, errors: list[SkillLoadError] | None = None
+    ) -> None:
         self.skills = skills or {}
         self.errors = errors or []
 
     @classmethod
-    def discover(cls, defaults_dir: Path, project_dir: Path) -> "SkillsRegistry":
+    def discover(cls, defaults_dir: Path, project_dir: Path) -> SkillsRegistry:
         skills: dict[str, SkillMeta] = {}
         errors: list[SkillLoadError] = []
 
@@ -127,12 +128,16 @@ def _load_skill_meta(path: Path) -> tuple[SkillMeta | None, SkillLoadError | Non
     if not isinstance(description, str) or not description.strip():
         return None, SkillLoadError(path, "frontmatter description must be a non-empty string")
 
-    return SkillMeta(name=name.strip(), description=description.strip(), skill_dir=path.parent), None
+    return SkillMeta(
+        name=name.strip(), description=description.strip(), skill_dir=path.parent
+    ), None
 
 
 def _is_unsafe_reference_path(file: str) -> bool:
     path = Path(file)
-    return path.is_absolute() or ".." in path.parts or not path.parts or path.parts[0] != "references"
+    return (
+        path.is_absolute() or ".." in path.parts or not path.parts or path.parts[0] != "references"
+    )
 
 
 def _read_resolved_file(path: Path, allowed_root: Path) -> str:

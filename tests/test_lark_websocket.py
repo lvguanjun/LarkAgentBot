@@ -9,9 +9,8 @@ from typing import Any
 
 import pytest
 
-from lark_agent.config import AppConfig, ConversationConfig, LLMConfig, LarkConfig
+from lark_agent.config import AppConfig, ConversationConfig, LarkConfig, LLMConfig
 from lark_agent.main import build_runner, configure_logging, validate_lark_config
-from lark_agent.transport.lark.bot_info import LarkBotInfo
 from lark_agent.transport.base import (
     CodeBlockPart,
     DividerPart,
@@ -27,6 +26,7 @@ from lark_agent.transport.base import (
     TextPart,
 )
 from lark_agent.transport.lark.adapter import LarkMessageEventAdapter
+from lark_agent.transport.lark.bot_info import LarkBotInfo
 from lark_agent.transport.lark.dedupe import TTLSeenCache
 from lark_agent.transport.lark.image_downloader import LarkImageDownloader
 from lark_agent.transport.lark.runner import LarkWebSocketBotRunner
@@ -302,7 +302,10 @@ def test_adapter_ignores_unknown_chat_type_and_message_type() -> None:
     adapter = LarkMessageEventAdapter()
 
     assert adapter.to_incoming_message(make_event(chat_type="unknown")) is None
-    assert adapter.to_incoming_message(make_event(message_type="unknown", content={"file_key": "f"})) is None
+    assert (
+        adapter.to_incoming_message(make_event(message_type="unknown", content={"file_key": "f"}))
+        is None
+    )
 
 
 @pytest.mark.parametrize(
@@ -427,7 +430,11 @@ def test_adapter_converts_interactive_card_elements() -> None:
                 fields={"summary": "日程分享测试", "start_time": "1", "end_time": "2"},
             ),
         ),
-        ("share_chat", {"chat_id": "oc_1"}, SummaryPart(kind="share_chat", fields={"chat_id": "oc_1"})),
+        (
+            "share_chat",
+            {"chat_id": "oc_1"},
+            SummaryPart(kind="share_chat", fields={"chat_id": "oc_1"}),
+        ),
         (
             "share_user",
             {"user_id": "ou_1"},
@@ -588,10 +595,14 @@ async def test_image_downloader_uses_image_api_first() -> None:
         )
     )
     resource_api = FakeDownloadApi()
-    client = SimpleNamespace(im=SimpleNamespace(v1=SimpleNamespace(
-        image=image_api,
-        message_resource=resource_api,
-    )))
+    client = SimpleNamespace(
+        im=SimpleNamespace(
+            v1=SimpleNamespace(
+                image=image_api,
+                message_resource=resource_api,
+            )
+        )
+    )
     downloader = LarkImageDownloader(client)
 
     image = await downloader.download_image("msg-1", "img-1")
@@ -612,10 +623,14 @@ async def test_image_downloader_falls_back_to_message_resource_api() -> None:
             raw=SimpleNamespace(headers={"Content-Type": "image/png"}),
         )
     )
-    client = SimpleNamespace(im=SimpleNamespace(v1=SimpleNamespace(
-        image=image_api,
-        message_resource=resource_api,
-    )))
+    client = SimpleNamespace(
+        im=SimpleNamespace(
+            v1=SimpleNamespace(
+                image=image_api,
+                message_resource=resource_api,
+            )
+        )
+    )
     downloader = LarkImageDownloader(client)
 
     image = await downloader.download_image("msg-1", "img-1")
@@ -788,7 +803,7 @@ def test_validate_lark_config_fails_fast_for_missing_credentials(tmp_path) -> No
         conversation=ConversationConfig(),
     )
 
-    with pytest.raises(ValueError, match="lark.app_secret"):
+    with pytest.raises(ValueError, match=r"lark\.app_secret"):
         validate_lark_config(config)
 
 
@@ -803,7 +818,9 @@ def test_validate_lark_config_does_not_require_env_bot_id(tmp_path) -> None:
     validate_lark_config(config)
 
 
-def test_build_runner_fetches_bot_open_id_for_router(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+def test_build_runner_fetches_bot_open_id_for_router(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
     fake_client = FakeLarkClient(FakeMessageApi())
     requested_clients: list[tuple[str, str]] = []
 
@@ -812,11 +829,11 @@ def test_build_runner_fetches_bot_open_id_for_router(monkeypatch: pytest.MonkeyP
             self._app_id = ""
             self._app_secret = ""
 
-        def app_id(self, app_id: str) -> "FakeClientBuilder":
+        def app_id(self, app_id: str) -> FakeClientBuilder:
             self._app_id = app_id
             return self
 
-        def app_secret(self, app_secret: str) -> "FakeClientBuilder":
+        def app_secret(self, app_secret: str) -> FakeClientBuilder:
             self._app_secret = app_secret
             return self
 

@@ -449,3 +449,36 @@ Implemented Feishu image message support: authenticated image downloads, local b
 ### Next Steps
 
 - None - task complete
+
+
+## Session 13: Feishu card streaming replies
+
+**Date**: 2026-07-06
+**Task**: Feishu card streaming replies
+**Branch**: `master`
+
+### Summary
+
+Implemented Feishu CardKit streaming replies with markdown cards, reaction lifecycle, streaming LLM support, tool-call status updates, CardKit close-streaming wire-format fix, regression tests, and backend spec notes.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `851af15` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

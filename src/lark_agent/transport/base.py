@@ -212,6 +212,49 @@ class SendResult:
     thread_id: str | None = None
 
 
+class MessageReactor(Protocol):
+    async def add_reaction(self, message_id: str, emoji_type: str) -> str | None:
+        """Add an emoji reaction. Returns reaction_id for later removal."""
+        ...
+
+    async def remove_reaction(self, message_id: str, reaction_id: str) -> None:
+        ...
+
+
+@dataclass
+class StreamingCardState:
+    card_id: str
+    element_id: str = "md_main"
+    sequence: int = 0
+
+    def next_sequence(self) -> int:
+        self.sequence += 1
+        return self.sequence
+
+
+class CardStreamer(Protocol):
+    async def create_streaming_card(self) -> StreamingCardState:
+        ...
+
+    async def send_card(
+        self,
+        chat_id: str,
+        card_id: str,
+        *,
+        reply_to_message_id: str | None = None,
+        reply_in_thread: bool = False,
+    ) -> SendResult:
+        ...
+
+    async def update_card_content(
+        self, card_id: str, element_id: str, content: str, sequence: int
+    ) -> None:
+        ...
+
+    async def close_streaming(self, card_id: str, sequence: int) -> None:
+        ...
+
+
 class ImageDownloader(Protocol):
     async def download_image(self, message_id: str, file_key: str) -> DownloadedImage:
         ...

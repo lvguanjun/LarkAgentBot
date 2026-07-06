@@ -245,6 +245,75 @@ request fields, ack-first scheduling, TTL dedupe, missing-key skip, background
 error logging, event-handler registration, config validation, and bot identity
 injection with fake Lark clients.
 
+### Scenario: Feishu/Lark CardKit Streaming Close
+
+#### 1. Scope / Trigger
+
+- Trigger: CardKit streaming replies must close `streaming_mode` after the final
+  markdown update.
+- Scope: `transport/lark/card_streamer.py` and adapter-level tests using fake
+  Lark SDK clients.
+
+#### 2. Signatures
+
+- `CardStreamer.close_streaming(card_id: str, sequence: int) -> None`
+- Lark SDK request: `SettingsCardRequest(card_id, request_body)`.
+
+#### 3. Contracts
+
+- Closing streaming uses `client.cardkit.v1.card.asettings`.
+- The request body must set `sequence` to the next monotonically increasing
+  card sequence.
+- In `lark-oapi==1.7.0`, `SettingsCardRequestBody.settings` is a `str`, not a
+  `Settings` object.
+- The wire value must be a JSON string:
+  `{"config": {"streaming_mode": false}}`.
+
+#### 4. Validation & Error Matrix
+
+- CardKit response `success() is True` -> return `None`.
+- CardKit response failure -> raise `CardStreamError` with action, code, and
+  message.
+- Passing a `Settings` object -> CardKit returns `code=9499` with
+  `Invalid parameter type in json: Settings`.
+- Missing SDK builder method such as `Settings.builder().streaming_mode(...)`
+  -> implementation bug; cover with adapter-level regression tests.
+
+#### 5. Good/Base/Bad Cases
+
+- Good: final card update uses repaired/full markdown, then
+  `close_streaming(card_id, next_sequence)` sends
+  `settings` as a JSON string whose decoded value has
+  `config.streaming_mode is False`.
+- Base: no `card_streamer` is configured, so `BotApp` uses text replies and
+  does not call CardKit.
+- Bad: setting `streaming_mode` directly on `Settings` raises
+  `AttributeError` in the current SDK.
+- Bad: passing `Settings(config=Config(streaming_mode=False))` reaches the API
+  as an object and is rejected as the wrong JSON parameter type.
+
+#### 6. Tests Required
+
+- Unit test `LarkCardStreamer.close_streaming` with a fake `card.asettings`
+  client and assert `request.request_body.settings` is a JSON string whose
+  decoded value is `{"config": {"streaming_mode": False}}`.
+- App-level streaming tests must assert the card is closed after final content
+  update.
+
+#### 7. Wrong vs Correct
+
+Wrong:
+
+```python
+settings = Settings.builder().streaming_mode(False).build()
+```
+
+Correct:
+
+```python
+settings = json.dumps({"config": {"streaming_mode": False}}, ensure_ascii=False)
+```
+
 ### Scenario: Feishu/Lark Topic Conversation Persistence
 
 #### 1. Scope / Trigger

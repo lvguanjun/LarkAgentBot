@@ -74,7 +74,18 @@ class FakeResponse:
 
 class FakeLarkClient:
     def __init__(self, message_api: FakeMessageApi) -> None:
-        self.im = SimpleNamespace(v1=SimpleNamespace(message=message_api))
+        self.im = SimpleNamespace(
+            v1=SimpleNamespace(
+                message=message_api,
+                message_reaction=SimpleNamespace(),
+            ),
+        )
+        self.cardkit = SimpleNamespace(
+            v1=SimpleNamespace(
+                card=SimpleNamespace(),
+                card_element=SimpleNamespace(),
+            ),
+        )
 
 
 class FakeDownloadApi:

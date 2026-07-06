@@ -5,10 +5,10 @@ from typing import Any
 
 import pytest
 
-from lark_agent.app import BotApp, MissingThreadIdError
+from lark_agent.app import BotApp, MissingThreadIdError, StreamThrottle, repair_markdown
 from lark_agent.config import AppConfig, ConversationConfig, LLMConfig, LarkConfig
 from lark_agent.conversation import Conversation
-from lark_agent.llm_client import LLMClient
+from lark_agent.llm_client import LLMClient, StreamChunk
 from lark_agent.mcp import MCPConfig, MCPServerConfig
 from lark_agent.transport.base import (
     DownloadedImage,
@@ -17,6 +17,7 @@ from lark_agent.transport.base import (
     IncomingMessage,
     MentionPart,
     SendResult,
+    StreamingCardState,
     TextPart,
 )
 
@@ -975,3 +976,301 @@ mcpServers:
         "tool_call_id": "call-mcp-1",
         "content": "Error: MCP tool failed",
     }
+
+
+# --- Fakes for streaming / reactor / card tests ---
+
+
+class FakeReactor:
+    def __init__(self) -> None:
+        self.reactions: list[tuple[str, str, str]] = []
+        self.removals: list[tuple[str, str]] = []
+        self._next_id = 0
+
+    async def add_reaction(self, message_id: str, emoji_type: str) -> str | None:
+        self._next_id += 1
+        rid = f"reaction-{self._next_id}"
+        self.reactions.append((message_id, emoji_type, rid))
+        return rid
+
+    async def remove_reaction(self, message_id: str, reaction_id: str) -> None:
+        self.removals.append((message_id, reaction_id))
+
+
+class FakeCardStreamer:
+    def __init__(self, *, thread_id: str = "omt-card") -> None:
+        self.thread_id = thread_id
+        self.cards_created: list[str] = []
+        self.cards_sent: list[dict] = []
+        self.updates: list[tuple[str, str, str, int]] = []
+        self.closed: list[tuple[str, int]] = []
+        self._card_counter = 0
+
+    async def create_streaming_card(self) -> StreamingCardState:
+        self._card_counter += 1
+        card_id = f"card-{self._card_counter}"
+        self.cards_created.append(card_id)
+        return StreamingCardState(card_id=card_id)
+
+    async def send_card(
+        self,
+        chat_id: str,
+        card_id: str,
+        *,
+        reply_to_message_id: str | None = None,
+        reply_in_thread: bool = False,
+    ) -> SendResult:
+        self.cards_sent.append({
+            "chat_id": chat_id,
+            "card_id": card_id,
+            "reply_to_message_id": reply_to_message_id,
+            "reply_in_thread": reply_in_thread,
+        })
+        return SendResult(message_id="card-msg-1", thread_id=self.thread_id)
+
+    async def update_card_content(
+        self, card_id: str, element_id: str, content: str, sequence: int
+    ) -> None:
+        self.updates.append((card_id, element_id, content, sequence))
+
+    async def close_streaming(self, card_id: str, sequence: int) -> None:
+        self.closed.append((card_id, sequence))
+
+
+class FakeStreamingLLM:
+    def __init__(self, chunks_per_call: list[list[StreamChunk]]) -> None:
+        self._chunks_per_call = chunks_per_call
+        self.calls: list[tuple[str, list[dict], list[dict] | None]] = []
+
+    async def stream_message(
+        self,
+        system_prompt: str,
+        messages: list[dict],
+        *,
+        tools: list[dict] | None = None,
+    ):
+        self.calls.append((system_prompt, messages, tools))
+        chunks = self._chunks_per_call.pop(0)
+        for chunk in chunks:
+            yield chunk
+
+
+# --- repair_markdown tests ---
+
+
+def test_repair_markdown_closes_unclosed_code_fence() -> None:
+    assert repair_markdown("hello\n```python\ncode") == "hello\n```python\ncode\n```"
+
+
+def test_repair_markdown_leaves_closed_code_fence() -> None:
+    text = "hello\n```python\ncode\n```"
+    assert repair_markdown(text) == text
+
+
+def test_repair_markdown_handles_no_fences() -> None:
+    assert repair_markdown("just text") == "just text"
+
+
+def test_repair_markdown_handles_multiple_unclosed() -> None:
+    text = "a\n```\ncode1\n```\nb\n```\ncode2"
+    assert repair_markdown(text) == text + "\n```"
+
+
+# --- StreamThrottle tests ---
+
+
+def test_stream_throttle_first_call_always_returns_true() -> None:
+    throttle = StreamThrottle(1000)
+    assert throttle.should_update() is True
+
+
+def test_stream_throttle_subsequent_calls_within_interval_return_false() -> None:
+    throttle = StreamThrottle(10_000)
+    throttle.should_update()
+    assert throttle.should_update() is False
+
+
+# --- Streaming reply tests ---
+
+
+async def test_streaming_reply_creates_card_and_streams(tmp_path: Path) -> None:
+    fake_llm = FakeStreamingLLM([
+        [
+            StreamChunk(delta_text="Hello "),
+            StreamChunk(delta_text="world!"),
+            StreamChunk(finish_reason="stop"),
+        ],
+    ])
+    sender = FakeSender()
+    card_streamer = FakeCardStreamer()
+    reactor = FakeReactor()
+    app = BotApp(
+        make_config(tmp_path),
+        sender=sender,
+        llm_client=LLMClient(LLMConfig(model="fake"), client=fake_llm),
+        reactor=reactor,
+        card_streamer=card_streamer,
+    )
+    message = IncomingMessage(
+        message_id="msg-1",
+        chat_id="chat-1",
+        chat_type="p2p",
+        sender_id="user-1",
+        content=[TextPart("hello")],
+    )
+
+    reply = await app.handle_message(message)
+
+    assert reply == "Hello world!"
+    assert card_streamer.cards_created == ["card-1"]
+    assert card_streamer.cards_sent[0]["card_id"] == "card-1"
+    assert card_streamer.cards_sent[0]["reply_in_thread"] is True
+    assert len(card_streamer.closed) == 1
+    assert card_streamer.closed[0][0] == "card-1"
+
+    final_update = card_streamer.updates[-1]
+    assert final_update[2] == "Hello world!"
+
+    assert sender.sent == []
+
+
+async def test_streaming_reply_emoji_lifecycle(tmp_path: Path) -> None:
+    fake_llm = FakeStreamingLLM([
+        [StreamChunk(delta_text="reply", finish_reason="stop")],
+    ])
+    reactor = FakeReactor()
+    card_streamer = FakeCardStreamer()
+    app = BotApp(
+        make_config(tmp_path),
+        sender=FakeSender(),
+        llm_client=LLMClient(LLMConfig(model="fake"), client=fake_llm),
+        reactor=reactor,
+        card_streamer=card_streamer,
+    )
+    message = IncomingMessage(
+        message_id="msg-1",
+        chat_id="chat-1",
+        chat_type="p2p",
+        sender_id="user-1",
+        content=[TextPart("hello")],
+    )
+
+    await app.handle_message(message)
+
+    assert reactor.reactions[0] == ("msg-1", "Typing", "reaction-1")
+    assert reactor.removals == [("msg-1", "reaction-1")]
+    assert reactor.reactions[1] == ("msg-1", "DONE", "reaction-2")
+
+
+async def test_streaming_reply_with_tool_calls(tmp_path: Path) -> None:
+    defaults = tmp_path / "defaults"
+    defaults.mkdir()
+    (defaults / "AGENTS.md").write_text("system prompt", encoding="utf-8")
+    write_skill(
+        skills_root(defaults), "writer",
+        name="writer", description="Writes docs", body="Use short sentences.",
+    )
+
+    tool_call = {
+        "id": "call-1",
+        "type": "function",
+        "function": {"name": "read_skill", "arguments": '{"name": "writer"}'},
+    }
+    fake_llm = FakeStreamingLLM([
+        [
+            StreamChunk(delta_text="Let me check..."),
+            StreamChunk(
+                finish_reason="tool_calls",
+                accumulated_tool_calls=[tool_call],
+            ),
+        ],
+        [
+            StreamChunk(delta_text=" Here is the skill content."),
+            StreamChunk(finish_reason="stop"),
+        ],
+    ])
+    card_streamer = FakeCardStreamer()
+    app = BotApp(
+        make_config(tmp_path),
+        sender=FakeSender(),
+        llm_client=LLMClient(LLMConfig(model="fake"), client=fake_llm),
+        card_streamer=card_streamer,
+    )
+    message = IncomingMessage(
+        message_id="msg-1",
+        chat_id="chat-1",
+        chat_type="p2p",
+        sender_id="user-1",
+        content=[TextPart("use the writer skill")],
+    )
+
+    reply = await app.handle_message(message)
+
+    assert reply == "Let me check... Here is the skill content."
+    tool_status_updates = [u for u in card_streamer.updates if "正在调用" in u[2]]
+    assert len(tool_status_updates) >= 1
+    assert "read_skill" in tool_status_updates[0][2]
+
+    final_update = card_streamer.updates[-1]
+    assert "正在调用" not in final_update[2]
+
+    history_path = tmp_path / "groups" / "user-1" / "conversations" / "omt-card" / "history.jsonl"
+    history_lines = history_path.read_text(encoding="utf-8").splitlines()
+    assert len(history_lines) == 4
+    assert json.loads(history_lines[0])["role"] == "user"
+    assert json.loads(history_lines[1])["role"] == "assistant"
+    assert json.loads(history_lines[2])["role"] == "tool"
+    assert json.loads(history_lines[3])["role"] == "assistant"
+
+
+async def test_no_card_streamer_falls_back_to_text(tmp_path: Path) -> None:
+    """When card_streamer is None but reactor is present, text path is used."""
+    fake_llm = FakeLLM("text reply")
+    reactor = FakeReactor()
+    sender = FakeSender()
+    app = BotApp(
+        make_config(tmp_path),
+        sender=sender,
+        llm_client=LLMClient(LLMConfig(model="fake"), client=fake_llm),
+        reactor=reactor,
+    )
+    message = IncomingMessage(
+        message_id="msg-1",
+        chat_id="chat-1",
+        chat_type="p2p",
+        sender_id="user-1",
+        content=[TextPart("hello")],
+    )
+
+    reply = await app.handle_message(message)
+
+    assert reply == "text reply"
+    assert sender.sent[0]["text"] == "text reply"
+    assert reactor.reactions[0][1] == "Typing"
+    assert reactor.reactions[1][1] == "DONE"
+
+
+async def test_command_does_not_trigger_reaction_or_card(tmp_path: Path) -> None:
+    reactor = FakeReactor()
+    card_streamer = FakeCardStreamer()
+    sender = FakeSender()
+    app = BotApp(
+        make_config(tmp_path),
+        sender=sender,
+        llm_client=LLMClient(LLMConfig(model="fake"), client=FakeLLM("unused")),
+        reactor=reactor,
+        card_streamer=card_streamer,
+    )
+    message = IncomingMessage(
+        message_id="msg-1",
+        chat_id="chat-1",
+        chat_type="p2p",
+        sender_id="user-1",
+        content=[TextPart("/help")],
+    )
+
+    await app.handle_message(message)
+
+    assert reactor.reactions == []
+    assert card_streamer.cards_created == []
+    assert sender.sent[0]["text"] is not None

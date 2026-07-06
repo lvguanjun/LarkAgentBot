@@ -6,13 +6,9 @@ from typing import Any, AsyncIterator
 
 import pytest
 
-from lark_agent.mcp import (
-    MCPConfig,
-    MCPManager,
-    MCPServerConfig,
-    build_mcp_tool_name,
-    load_mcp_config,
-)
+from lark_agent.mcp.config import MCPConfig, MCPServerConfig, load_mcp_config
+from lark_agent.mcp.manager import MCPManager
+from lark_agent.mcp.naming import build_mcp_tool_name
 from lark_agent.skills import SkillsRegistry
 from lark_agent.tools import BuiltinTools, ToolDispatcher
 

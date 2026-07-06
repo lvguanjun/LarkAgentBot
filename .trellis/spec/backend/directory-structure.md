@@ -63,8 +63,12 @@ module and make consumers call that owner instead of re-parsing raw payloads.
   clients, and fake MCP/tool implementations.
 - External clients must be constructor-injected where practical so tests do not
   need credentials, network access, or live Feishu/Lark/OpenAI/MCP services.
-- Core modules should import MCP through the public `lark_agent.mcp` package
-  boundary unless they need an internal helper owned by that package.
+- Import package internals from their owner modules, not from package
+  `__init__.py` files. For example, import `MCPConfig` from
+  `lark_agent.mcp.config` and `MCPManager` from `lark_agent.mcp.manager`.
+- `__init__.py` files are package markers and may contain only a package
+  docstring or stable package metadata such as `__version__`; they must not
+  re-export package internals for shorter import paths.
 - Do not add a second application configuration path such as YAML config or a
   `--config` option. Environment variables and `.env` are the application
   configuration boundary.

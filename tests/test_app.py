@@ -9,7 +9,7 @@ from lark_agent.app import BotApp, MissingThreadIdError, StreamThrottle, repair_
 from lark_agent.config import AppConfig, ConversationConfig, LLMConfig, LarkConfig
 from lark_agent.conversation import Conversation
 from lark_agent.llm_client import LLMClient, StreamChunk
-from lark_agent.mcp import MCPConfig, MCPServerConfig
+from lark_agent.mcp.config import MCPConfig, MCPServerConfig
 from lark_agent.transport.base import (
     DownloadedImage,
     EmojiPart,

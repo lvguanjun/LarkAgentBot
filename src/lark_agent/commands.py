@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from lark_agent.config import AppConfig
-from lark_agent.mcp import MCPConfig
+from lark_agent.mcp.config import MCPConfig
 from lark_agent.project import Project
 from lark_agent.skills import SkillsRegistry
 from lark_agent.transport.base import IncomingMessage

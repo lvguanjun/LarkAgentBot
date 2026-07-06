@@ -12,7 +12,8 @@ from lark_agent.config import AppConfig
 from lark_agent.conversation import Conversation, Message
 from lark_agent.images import build_user_message, expand_images_for_llm
 from lark_agent.llm_client import LLMClient
-from lark_agent.mcp import MCPConfig, MCPManager
+from lark_agent.mcp.config import MCPConfig
+from lark_agent.mcp.manager import MCPManager
 from lark_agent.project import Project, ProjectStore
 from lark_agent.router import MessageRouter
 from lark_agent.tools import BuiltinTools, ToolDispatcher

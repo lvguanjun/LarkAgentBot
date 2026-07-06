@@ -26,14 +26,11 @@ from lark_agent.transport.base import (
     SummaryPart,
     TextPart,
 )
-from lark_agent.transport.lark import (
-    LarkMessageEventAdapter,
-    LarkImageDownloader,
-    LarkMessageSender,
-    LarkSendError,
-    LarkWebSocketBotRunner,
-    TTLSeenCache,
-)
+from lark_agent.transport.lark.adapter import LarkMessageEventAdapter
+from lark_agent.transport.lark.dedupe import TTLSeenCache
+from lark_agent.transport.lark.image_downloader import LarkImageDownloader
+from lark_agent.transport.lark.runner import LarkWebSocketBotRunner
+from lark_agent.transport.lark.sender import LarkMessageSender, LarkSendError
 
 
 class FakeMessageApi:

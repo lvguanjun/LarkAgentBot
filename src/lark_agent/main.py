@@ -9,14 +9,12 @@ import lark_oapi as lark
 from lark_agent.app import BotApp
 from lark_agent.config import AppConfig, LarkConfig, load_config
 from lark_agent.llm_client import LLMClient
-from lark_agent.transport.lark import (
-    LarkCardStreamer,
-    LarkImageDownloader,
-    LarkMessageReactor,
-    LarkMessageSender,
-    LarkWebSocketBotRunner,
-)
 from lark_agent.transport.lark.bot_info import fetch_lark_bot_info
+from lark_agent.transport.lark.card_streamer import LarkCardStreamer
+from lark_agent.transport.lark.image_downloader import LarkImageDownloader
+from lark_agent.transport.lark.reactor import LarkMessageReactor
+from lark_agent.transport.lark.runner import LarkWebSocketBotRunner
+from lark_agent.transport.lark.sender import LarkMessageSender
 
 
 def configure_logging(level: int = logging.INFO) -> None:

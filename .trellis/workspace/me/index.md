@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 13
+- **Total Sessions**: 14
 - **Last Active**: 2026-07-06
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~484 | Active |
+| `journal-1.md` | ~517 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 14 | 2026-07-06 | Avoid init re-export imports | `da0b465` | `master` |
 | 13 | 2026-07-06 | Feishu card streaming replies | `851af15` | `master` |
 | 12 | 2026-07-05 | Feishu image message support | `7afd329` | `master` |
 | 11 | 2026-07-05 | 修复飞书话题持久化 | `991d30e` | `master` |

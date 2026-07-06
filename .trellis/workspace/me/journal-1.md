@@ -95,7 +95,10 @@ Implemented the lark-agent-bot Skills slice: Skills discovery with default/group
 
 ### Main Changes
 
-(Add details)
+- Added backend directory-structure guidance that package internals must be
+  imported from owner modules, not package `__init__.py` files.
+- Removed MCP and Feishu/Lark transport package-level re-exports.
+- Updated application and test imports to use concrete modules directly.
 
 ### Git Commits
 
@@ -105,7 +108,9 @@ Implemented the lark-agent-bot Skills slice: Skills discovery with default/group
 
 ### Testing
 
-- [OK] (Add test results)
+- [OK] `UV_CACHE_DIR=.uv-cache uv run --extra dev pytest tests/test_mcp_manager.py tests/test_lark_websocket.py tests/test_app.py`
+- [OK] `UV_CACHE_DIR=.uv-cache uv run --extra dev python -m compileall src`
+- [OK] `UV_CACHE_DIR=.uv-cache uv run --extra dev pytest`
 
 ### Status
 
@@ -470,6 +475,39 @@ Implemented Feishu CardKit streaming replies with markdown cards, reaction lifec
 | Hash | Message |
 |------|---------|
 | `851af15` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 14: Avoid init re-export imports
+
+**Date**: 2026-07-06
+**Task**: Avoid init re-export imports
+**Branch**: `master`
+
+### Summary
+
+记录并落实 __init__.py 不承担聚合导入职责的后端规范；移除 MCP 与 Lark transport 包级 re-export；将源码和测试改为从 owner module 绝对导入，并通过完整测试。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `da0b465` | (see git log) |
 
 ### Testing
 
